@@ -9,6 +9,7 @@ import Menu from '@material-ui/core/Menu';
 import MenuItem from '@material-ui/core/MenuItem';
 import { clusterApiUrl } from '@solana/web3.js';
 import { useWalletSelector } from '../utils/wallet';
+import { useLocalStorageState } from '../utils/utils';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 import CheckIcon from '@material-ui/icons/Check';
 import AddIcon from '@material-ui/icons/Add';
@@ -24,6 +25,7 @@ import Tooltip from '@material-ui/core/Tooltip';
 import AddAccountDialog from './AddAccountDialog';
 import DeleteAccountDialog from './DeleteAccountDialog';
 import AddHardwareWalletDialog from './AddHarwareWalletDialog';
+import CustomEndpointsDialog from './CustomEndpointsDialog';
 
 const useStyles = makeStyles((theme) => ({
   content: {
@@ -67,9 +69,17 @@ function NetworkSelector() {
   const { endpoint, setEndpoint } = useConnectionConfig();
   const [anchorEl, setAnchorEl] = useState(null);
   const classes = useStyles();
+  const [manageCustomEndpointsOpen, setManageCustomEndpointsOpen] = useState(
+    false,
+  );
+  const [customNetworks, setCustomNetworks] = useLocalStorageState(
+    'customNetworks',
+    [],
+  );
 
   const networks = [
     MAINNET_URL,
+    'https://api.mainnet-beta.solana.com',
     clusterApiUrl('devnet'),
     clusterApiUrl('testnet'),
     'http://localhost:8899',
@@ -77,19 +87,43 @@ function NetworkSelector() {
 
   const networkLabels = {
     [MAINNET_URL]: 'Mainnet Beta',
+    'https://api.mainnet-beta.solana.com': 'Mainnet Beta',
     [clusterApiUrl('devnet')]: 'Devnet',
     [clusterApiUrl('testnet')]: 'Testnet',
+    'http://localhost:8899': 'Local Validator',
   };
 
   return (
     <>
+      <CustomEndpointsDialog
+        customEndpoints={customNetworks}
+        open={manageCustomEndpointsOpen}
+        onClose={() => {
+          setManageCustomEndpointsOpen(false);
+        }}
+        onAdd={(customEndpoint) => {
+          const uniqueNetworks = [
+            ...new Set([...customNetworks, customEndpoint]),
+          ];
+          setCustomNetworks(uniqueNetworks);
+        }}
+        onRemove={(customEndpoint) => {
+          // If user removes the selected endpoint, default back to the mainnet endpoint
+          if (customEndpoint === endpoint) {
+            setEndpoint(networks[0]);
+          }
+          setCustomNetworks(
+            customNetworks.filter((network) => network !== customEndpoint),
+          );
+        }}
+      />
       <Hidden xsDown>
         <Button
           color="inherit"
           onClick={(e) => setAnchorEl(e.target)}
           className={classes.button}
         >
-          {networkLabels[endpoint] ?? 'Network'}
+          {networkLabels[endpoint] ?? 'Custom Network'}
         </Button>
       </Hidden>
       <Hidden smUp>
@@ -109,7 +143,7 @@ function NetworkSelector() {
         }}
         getContentAnchorEl={null}
       >
-        {networks.map((network) => (
+        {[...networks, ...customNetworks].map((network) => (
           <MenuItem
             key={network}
             onClick={() => {
@@ -124,6 +158,14 @@ function NetworkSelector() {
             {network}
           </MenuItem>
         ))}
+        <MenuItem
+          onClick={() => {
+            setManageCustomEndpointsOpen(true);
+          }}
+          style={{ paddingLeft: '48px' }}
+        >
+          {'Manage custom endpoints...'}
+        </MenuItem>
       </Menu>
     </>
   );
