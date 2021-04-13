@@ -8,15 +8,22 @@ import {
 } from './ledger-core';
 import { DERIVATION_PATH } from './localStorage';
 import bs58 from 'bs58';
+import { Message, PublicKey, Transaction } from '@solana/web3.js';
 
 export class LedgerWalletProvider {
-  constructor(args) {
-    this.onDisconnect = (args && args.onDisconnect) || (() => {});
-    this.derivationPath = args
-      ? args.derivationPath
-      : DERIVATION_PATH.bip44Change;
-    this.account = args ? args.account : undefined;
-    this.change = args ? args.change : undefined;
+  onDisconnect: () => void;
+  derivationPath: string;
+  account: number;
+  change: number;
+  solanaDerivationPath: Buffer;
+  pubKey: PublicKey | undefined;
+  transport: TransportWebUsb;
+
+  constructor({onDisconnect, derivationPath, account, change}: {onDisconnect: () => void, derivationPath: string, account: number, change: number}) {
+    this.onDisconnect = onDisconnect || (() => {});
+    this.derivationPath = derivationPath || DERIVATION_PATH.bip44Change;
+    this.account = account;
+    this.change = change;
     this.solanaDerivationPath = solana_derivation_path(
       this.account,
       this.change,
@@ -24,32 +31,31 @@ export class LedgerWalletProvider {
     );
   }
 
-  init = async () => {
+  async init() {
     this.transport = await TransportWebUsb.create();
     this.pubKey = await getPublicKey(this.transport, this.solanaDerivationPath);
     this.transport.on('disconnect', this.onDisconnect);
-    this.listAddresses = async (walletCount) => {
-      // TODO: read accounts from ledger
-      return [this.pubKey];
-    };
     return this;
-  };
+  }
 
   get publicKey() {
     return this.pubKey;
   }
 
-  signTransaction = async (transaction) => {
+  async signTransaction(transaction: Transaction) {
     const sig_bytes = await solana_ledger_sign_transaction(
       this.transport,
       this.solanaDerivationPath,
       transaction,
     );
+    if (!this.publicKey) {
+      throw new Error('');
+    }
     transaction.addSignature(this.publicKey, sig_bytes);
     return transaction;
   };
 
-  createSignature = async (message) => {
+  async createSignature(message: Message) {
     const sig_bytes = await solana_ledger_sign_bytes(
       this.transport,
       this.solanaDerivationPath,
@@ -58,7 +64,7 @@ export class LedgerWalletProvider {
     return bs58.encode(sig_bytes);
   };
 
-  confirmPublicKey = async () => {
+  async confirmPublicKey() {
     return await solana_ledger_confirm_public_key(
       this.transport,
       this.solanaDerivationPath,
