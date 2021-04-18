@@ -19,6 +19,7 @@ import LoginPage from './pages/LoginPage';
 import ConnectionsPage from './pages/ConnectionsPage';
 import { isExtension } from './utils/utils';
 import { PageProvider, usePage } from './utils/page';
+import AddHardwareWalletDialog from './components/AddHarwareWalletDialog';
 
 export default function App() {
   // TODO: add toggle for dark mode
@@ -42,18 +43,19 @@ export default function App() {
   }
 
   let appElement = (
-    <NavigationFrame>
-      <Suspense fallback={<LoadingIndicator />}>
-        <PageContents />
-      </Suspense>
-    </NavigationFrame>
+    <PageProvider>
+      <NavigationFrame>
+        <Suspense fallback={<LoadingIndicator />}>
+          <PageContents />
+          <AddHardwareWalletDialog />
+        </Suspense>
+      </NavigationFrame>
+    </PageProvider>
   );
 
   if (isExtension) {
     appElement = (
-      <ConnectedWalletsProvider>
-        <PageProvider>{appElement}</PageProvider>
-      </ConnectedWalletsProvider>
+      <ConnectedWalletsProvider>{appElement}</ConnectedWalletsProvider>
     );
   }
 
@@ -76,7 +78,7 @@ export default function App() {
 
 function PageContents() {
   const wallet = useWallet();
-  const [page] = usePage();
+  const { page } = usePage();
   if (!wallet) {
     return <LoginPage />;
   }

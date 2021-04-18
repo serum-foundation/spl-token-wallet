@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Typography from '@material-ui/core/Typography';
 import DialogActions from '@material-ui/core/DialogActions';
 import Button from '@material-ui/core/Button';
@@ -14,6 +14,8 @@ import {
 } from '../pages/LoginPage.js';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import { useSnackbar } from 'notistack';
+import { useWalletSelector } from '../utils/wallet';
+import { usePage } from '../utils/page';
 
 const AddHardwareView = {
   Splash: 0,
@@ -21,7 +23,37 @@ const AddHardwareView = {
   Confirm: 2,
 };
 
-export default function AddHardwareWalletDialog({ open, onAdd, onClose }) {
+export default function AddHardwareWalletDialog() {
+  const { setHardwareWalletAccount, setWalletSelector } = useWalletSelector();
+  const { addHardwareWalletDialogOpen, setAddHardwareWalletDialogOpen } = usePage();
+  return (
+    <AddHardwareWalletDialogForm
+      open={addHardwareWalletDialogOpen}
+      onClose={() => setAddHardwareWalletDialogOpen(false)}
+      onAdd={({ publicKey, derivationPath, account, change }) => {
+        setHardwareWalletAccount({
+          name: 'Hardware wallet',
+          publicKey,
+          importedAccount: publicKey.toString(),
+          ledger: true,
+          derivationPath,
+          account,
+          change,
+        });
+        setWalletSelector({
+          walletIndex: undefined,
+          importedPubkey: publicKey.toString(),
+          ledger: true,
+          derivationPath,
+          account,
+          change,
+        });
+      }}
+    />
+  );
+}
+
+function AddHardwareWalletDialogForm({ open, onAdd, onClose }) {
   const [view, setView] = useState(AddHardwareView.Splash);
   const [hardwareAccount, setHardwareAccount] = useState(null);
   return (

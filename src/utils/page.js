@@ -1,12 +1,22 @@
 import { createContext, useContext, useState } from 'react';
 
-const PageContext = createContext(['wallet', () => {}]);
+const defaultValue = {
+  page: 'wallet',
+  setPage: () => {},
+  addHardwareWalletDialogOpen: false,
+  setAddHardwareWalletDialogOpen: () => {},
+};
+
+const PageContext = createContext(defaultValue);
 
 export const PageProvider = ({ children }) => {
-  const [page, setPage] = useState('wallet');
+  const [page, setPage] = useState(defaultValue.page);
+  const [addHardwareWalletDialogOpen, setAddHardwareWalletDialogOpen ] = useState(defaultValue.addHardwareWalletDialogOpen);
+ 
+  const value = {page, setPage, addHardwareWalletDialogOpen, setAddHardwareWalletDialogOpen}
 
   return (
-    <PageContext.Provider value={[page, setPage]}>
+    <PageContext.Provider value={value}>
       {children}
     </PageContext.Provider>
   );

@@ -24,7 +24,6 @@ import Tooltip from '@material-ui/core/Tooltip';
 import ImportExportIcon from '@material-ui/icons/ImportExport';
 import AddAccountDialog from './AddAccountDialog';
 import DeleteMnemonicDialog from './DeleteMnemonicDialog';
-import AddHardwareWalletDialog from './AddHarwareWalletDialog';
 import { ExportMnemonicDialog } from './ExportAccountDialog.js';
 import {
   isExtension,
@@ -85,7 +84,7 @@ export default function NavigationFrame({ children }) {
 
 function NavigationButtons() {
   const isExtensionWidth = useIsExtensionWidth();
-  const [page] = usePage();
+  const { page } = usePage();
 
   if (isExtensionPopup) {
     return null;
@@ -125,7 +124,7 @@ function ExpandButton() {
 
 function WalletButton() {
   const classes = useStyles();
-  const setPage = usePage()[1];
+  const { setPage } = usePage();
   const onClick = () => setPage('wallet');
 
   return (
@@ -148,7 +147,7 @@ function WalletButton() {
 
 function ConnectionsButton() {
   const classes = useStyles();
-  const setPage = usePage()[1];
+  const { setPage } = usePage();
   const onClick = () => setPage('connections');
   const connectedWallets = useConnectedWallets();
 
@@ -242,16 +241,12 @@ function WalletSelector() {
   const {
     accounts,
     hardwareWalletAccount,
-    setHardwareWalletAccount,
     setWalletSelector,
     addAccount,
   } = useWalletSelector();
+  const { setAddHardwareWalletDialogOpen } = usePage();
   const [anchorEl, setAnchorEl] = useState(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
-  const [
-    addHardwareWalletDialogOpen,
-    setAddHardwareWalletDialogOpen,
-  ] = useState(false);
   const [deleteMnemonicOpen, setDeleteMnemonicOpen] = useState(false);
   const [exportMnemonicOpen, setExportMnemonicOpen] = useState(false);
   const classes = useStyles();
@@ -261,29 +256,6 @@ function WalletSelector() {
   }
   return (
     <>
-      <AddHardwareWalletDialog
-        open={addHardwareWalletDialogOpen}
-        onClose={() => setAddHardwareWalletDialogOpen(false)}
-        onAdd={({ publicKey, derivationPath, account, change }) => {
-          setHardwareWalletAccount({
-            name: 'Hardware wallet',
-            publicKey,
-            importedAccount: publicKey.toString(),
-            ledger: true,
-            derivationPath,
-            account,
-            change,
-          });
-          setWalletSelector({
-            walletIndex: undefined,
-            importedPubkey: publicKey.toString(),
-            ledger: true,
-            derivationPath,
-            account,
-            change,
-          });
-        }}
-      />
       <AddAccountDialog
         open={addAccountOpen}
         onClose={() => setAddAccountOpen(false)}

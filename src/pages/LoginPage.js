@@ -27,9 +27,11 @@ import MenuItem from '@material-ui/core/MenuItem';
 import { useCallAsync } from '../utils/notifications';
 import Link from '@material-ui/core/Link';
 import { validateMnemonic } from 'bip39';
+import { usePage } from '../utils/page';
 
 export default function LoginPage() {
   const [restore, setRestore] = useState(false);
+  const { setAddHardwareWalletDialogOpen } = usePage();
   return (
     <Container maxWidth="sm">
       {restore ? (
@@ -40,6 +42,11 @@ export default function LoginPage() {
           <br />
           <Link style={{ cursor: 'pointer' }} onClick={() => setRestore(true)}>
             Restore existing wallet
+          </Link>
+          <br />
+          <br />
+          <Link style={{ cursor: 'pointer' }} onClick={() => setAddHardwareWalletDialogOpen(true)}>
+            Import hardware wallet
           </Link>
         </>
       )}
