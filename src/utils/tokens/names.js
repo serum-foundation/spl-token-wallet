@@ -239,6 +239,11 @@ const POPULAR_TOKENS = {
       icon:
         'https://raw.githubusercontent.com/nathanielparke/awesome-serum-markets/master/icons/oxy.svg',
     },
+    {
+      tokenSymbol: 'ODOP',
+      mintAddress: '4pk3pf9nJDN1im1kNwWJN1ThjE8pCYCTexXYGyFjqKVf',
+      tokenName: 'OuroSRL Tokenized Dominican Peso',
+    },
   ],
 };
 
