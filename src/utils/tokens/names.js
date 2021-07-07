@@ -245,8 +245,15 @@ const POPULAR_TOKENS = {
     },
     {
       tokenSymbol: 'COPE',
-      mintAddress: '3K6rftdAaQYMPunrtNRHgnK2UAtjm2JwyT2oCiTDouYE',
+      mintAddress: '8HGyAAB1yoM1ttS7pXjHMa3dukTFGQggnFFH3hJZgzQh',
       tokenName: 'COPE',
+      icon:
+        'https://raw.githubusercontent.com/cyriimm/COPE/main/COPE_LOGO.png',
+    },
+    {
+      tokenSymbol: 'xCOPE',
+      mintAddress: '3K6rftdAaQYMPunrtNRHgnK2UAtjm2JwyT2oCiTDouYE',
+      tokenName: 'xCOPE',
       icon:
         'https://cdn.jsdelivr.net/gh/solana-labs/token-list/assets/mainnet/3K6rftdAaQYMPunrtNRHgnK2UAtjm2JwyT2oCiTDouYE/logo.jpg',
     },
