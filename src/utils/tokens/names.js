@@ -386,5 +386,5 @@ export function usePopularTokens() {
     : POPULAR_TOKENS[endpoint]
   ).map((tok) =>
     getTokenInfo(new PublicKey(tok.mintAddress), endpoint, tokenInfos),
-  );
+  ).filter((tokenInfo) => !!tokenInfo.address);
 }
