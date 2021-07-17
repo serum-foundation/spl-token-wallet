@@ -425,12 +425,14 @@ async function createAndTransferToAccount({
     mint,
   );
   let transaction = new Transaction();
-  transaction.add(
-    assertOwner({
-      account: destinationPublicKey,
-      owner: SystemProgram.programId,
-    }),
-  );
+  if(connection._rpcEndpoint?.includes('mainnet')){
+    transaction.add(
+      assertOwner({
+        account: destinationPublicKey,
+        owner: SystemProgram.programId,
+      }),
+    );
+  }
   transaction.add(createAccountInstruction);
   const transferBetweenAccountsTxn = createTransferBetweenSplTokenAccountsInstruction(
     {
