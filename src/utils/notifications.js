@@ -59,9 +59,9 @@ function ViewTransactionOnExplorerButton({ signature }) {
       component="a"
       target="_blank"
       rel="noopener"
-      href={`https://explorer.solana.com/tx/${signature}` + urlSuffix}
+      href={`https://solscan.io/tx/${signature}` + urlSuffix}
     >
-      View on Solana Explorer
+      View on Solscan
     </Button>
   );
 }

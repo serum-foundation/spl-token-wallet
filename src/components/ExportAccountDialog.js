@@ -8,7 +8,7 @@ import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Switch from '@material-ui/core/Switch';
 import DialogForm from './DialogForm';
 import { useWallet } from '../utils/wallet';
-import { getUnlockedMnemonicAndSeed } from '../utils/wallet-seed';
+import { useUnlockedMnemonicAndSeed } from '../utils/wallet-seed';
 
 export default function ExportAccountDialog({ open, onClose }) {
   const wallet = useWallet();
@@ -45,7 +45,7 @@ export default function ExportAccountDialog({ open, onClose }) {
 
 export function ExportMnemonicDialog({ open, onClose }) {
   const [isHidden, setIsHidden] = useState(true);
-  const mnemKey = getUnlockedMnemonicAndSeed();
+  const [mnemKey] = useUnlockedMnemonicAndSeed();
   return (
     <DialogForm open={open} onClose={onClose} fullWidth>
       <DialogTitle>Export mnemonic</DialogTitle>

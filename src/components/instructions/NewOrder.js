@@ -3,7 +3,7 @@ import Typography from '@material-ui/core/Typography';
 import LabelValue from './LabelValue';
 import { useWallet } from '../../utils/wallet';
 
-export default function Neworder({ instruction, onOpenAddress, v3=false }) {
+export default function Neworder({ instruction, onOpenAddress, v3 = false }) {
   const wallet = useWallet();
   const { data, market, marketInfo } = instruction;
   const marketLabel =

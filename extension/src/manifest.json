@@ -1,0 +1,35 @@
+{
+  "name": "Sollet",
+  "description": "Solana SPL Token Wallet",
+  "version": "0.3.0",
+  "browser_action": {
+    "default_popup": "index.html",
+    "default_title": "Open the popup"
+  },
+  "manifest_version": 2,
+  "icons": {
+    "16": "favicon.ico",
+    "192": "logo192.png",
+    "512": "logo512.png"
+  },
+  "background": {
+    "persistent": true,
+    "scripts": ["background.js"]
+  },
+  "permissions": [
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["file://*/*", "http://*/*", "https://*/*"],
+      "js": [
+        "contentscript.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": ["script.js"],
+  "content_security_policy": "script-src 'self' 'sha256-ek+jXksbUr00x+EdLLqiv69t8hATh5rPjHVvVVGA9ms='; object-src 'self'"
+}
+  

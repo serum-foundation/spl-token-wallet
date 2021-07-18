@@ -7,7 +7,7 @@ interface Markets {
     publicKey: PublicKey;
     name: string;
     deprecated?: boolean;
-  }
+  };
 }
 
 export const serumMarkets = (() => {
@@ -34,7 +34,7 @@ export const serumMarkets = (() => {
 
 // Create a cached API wrapper to avoid rate limits.
 class PriceStore {
-  cache: {}
+  cache: {};
 
   constructor() {
     this.cache = {};
@@ -50,7 +50,12 @@ class PriceStore {
         fetch(`https://serum-api.bonfida.com/orderbooks/${marketName}`).then(
           (resp) => {
             resp.json().then((resp) => {
-              if (resp.data.asks.length === 0 && resp.data.bids.length === 0) {
+              if (resp.data.asks === null || resp.data.bids === null) {
+                resolve(undefined);
+              } else if (
+                resp.data.asks.length === 0 &&
+                resp.data.bids.length === 0
+              ) {
                 resolve(undefined);
               } else if (resp.data.asks.length === 0) {
                 resolve(resp.data.bids[0].price);

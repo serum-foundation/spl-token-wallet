@@ -36,11 +36,22 @@ import {
 import { parseTokenAccountData } from '../utils/tokens/data';
 import { Switch, Tooltip } from '@material-ui/core';
 import { EthFeeEstimate } from './EthFeeEstimate';
+import { resolveDomainName, resolveTwitterHandle } from '../utils/name-service';
 
 const WUSDC_MINT = new PublicKey(
   'BXXkv6z8ykpG1yuvUDPgh732wzVHB69RnB9YgSYh3itW',
 );
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+const WUSDT_MINT = new PublicKey(
+  'BQcdHdAQW1hczDbBi9hiegXAR7A98Q9jx3X3iBBBDiq4',
+);
+
+const USDT_MINT = new PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
+const DISABLED_ERC20_MINTS = new Set([
+  'kinXdEcpDQeHPEuQnqmUgtYykqKGVFq6CeVX5iAHJq6',
+  'ABE7D8RU1eHfCJWzHYZZeymeE8k9nPPXfqge2NQYyKoL',
+]);
 
 export default function SendDialog({ open, onClose, publicKey, balanceInfo }) {
   const isProdNetwork = useIsProdNetwork();
@@ -55,6 +66,51 @@ export default function SendDialog({ open, onClose, publicKey, balanceInfo }) {
   const ethAccount = useEthAccount();
 
   const { mint, tokenName, tokenSymbol } = balanceInfo;
+
+  const getTabs = (mint) => {
+    if (mint?.equals(WUSDC_MINT)) {
+      return [
+        <Tab label="SPL WUSDC" key="spl" value="spl" />,
+        <Tab label="SPL USDC" key="wusdcToSplUsdc" value="wusdcToSplUsdc" />,
+        <Tab label="ERC20 USDC" key="swap" value="swap" />,
+      ];
+    } else if (mint?.equals(WUSDT_MINT)) {
+      return [
+        <Tab label="SPL WUSDT" key="spl" value="spl" />,
+        <Tab label="SPL USDT" key="wusdtToSplUsdt" value="wusdtToSplUsdt" />,
+        <Tab label="ERC20 USDT" key="swap" value="swap" />,
+      ];
+    } else if (
+      localStorage.getItem('sollet-private') &&
+      mint?.equals(USDC_MINT)
+    ) {
+      return [
+        <Tab label="SPL USDC" key="spl" value="spl" />,
+        <Tab label="SPL WUSDC" key="usdcToSplWUsdc" value="usdcToSplWUsdc" />,
+        <Tab label="ERC20 USDC" key="swap" value="swap" />,
+      ];
+    } else {
+      const erc20Tab = (
+        <Tab
+          label={`${swapCoinInfo.erc20Contract ? 'ERC20' : 'Native'} ${
+            swapCoinInfo.ticker
+          }`}
+          key="swap"
+          value="swap"
+        />
+      );
+      const tabs = [
+        <Tab label={`SPL ${swapCoinInfo.ticker}`} key="spl" value="spl" />,
+      ];
+      if (
+        !DISABLED_ERC20_MINTS.has(mint.toString()) ||
+        localStorage.getItem('sollet-private')
+      ) {
+        tabs.push(erc20Tab);
+      }
+      return tabs;
+    }
+  };
 
   return (
     <>
@@ -83,30 +139,7 @@ export default function SendDialog({ open, onClose, publicKey, balanceInfo }) {
             textColor="primary"
             indicatorColor="primary"
           >
-            {mint?.equals(WUSDC_MINT)
-              ? [
-                  <Tab label="SPL WUSDC" key="spl" value="spl" />,
-                  <Tab
-                    label="SPL USDC"
-                    key="wusdcToSplUsdc"
-                    value="wusdcToSplUsdc"
-                  />,
-                  <Tab label="ERC20 USDC" key="swap" value="swap" />,
-                ]
-              : [
-                  <Tab
-                    label={`SPL ${swapCoinInfo.ticker}`}
-                    key="spl"
-                    value="spl"
-                  />,
-                  <Tab
-                    label={`${
-                      swapCoinInfo.erc20Contract ? 'ERC20' : 'Native'
-                    } ${swapCoinInfo.ticker}`}
-                    key="swap"
-                    value="swap"
-                  />,
-                ]}
+            {getTabs(mint)}
           </Tabs>
         ) : null}
         {tab === 'spl' ? (
@@ -125,6 +158,26 @@ export default function SendDialog({ open, onClose, publicKey, balanceInfo }) {
             swapCoinInfo={swapCoinInfo}
             onSubmitRef={onSubmitRef}
             wusdcToSplUsdc
+          />
+        ) : tab === 'wusdtToSplUsdt' ? (
+          <SendSwapDialog
+            key={tab}
+            onClose={onClose}
+            publicKey={publicKey}
+            balanceInfo={balanceInfo}
+            swapCoinInfo={swapCoinInfo}
+            onSubmitRef={onSubmitRef}
+            wusdtToSplUsdt
+          />
+        ) : tab === 'usdcToSplWUsdc' ? (
+          <SendSwapDialog
+            key={tab}
+            onClose={onClose}
+            publicKey={publicKey}
+            balanceInfo={balanceInfo}
+            swapCoinInfo={swapCoinInfo}
+            onSubmitRef={onSubmitRef}
+            usdcToSplWUsdc
           />
         ) : (
           <SendSwapDialog
@@ -161,7 +214,7 @@ function SendSplDialog({ onClose, publicKey, balanceInfo, onSubmitRef }) {
     false,
   );
   const [shouldShowOverride, setShouldShowOverride] = useState();
-  const {
+  let {
     fields,
     destinationAddress,
     transferAmountString,
@@ -169,9 +222,39 @@ function SendSplDialog({ onClose, publicKey, balanceInfo, onSubmitRef }) {
   } = useForm(balanceInfo, addressHelperText, passValidation);
   const { decimals, mint } = balanceInfo;
   const mintString = mint && mint.toBase58();
+  const [isDomainName, setIsDomainName] = useState(false);
+  const [domainOwner, setDomainOwner] = useState();
 
   useEffect(() => {
     (async () => {
+      if (destinationAddress.startsWith('@')) {
+        const twitterOwner = await resolveTwitterHandle(
+          wallet.connection,
+          destinationAddress.slice(1),
+        );
+        if (!twitterOwner) {
+          setAddressHelperText(`This Twitter handle is not registered`);
+          setPassValidation(undefined);
+          setShouldShowOverride(undefined);
+          return;
+        }
+        setIsDomainName(true);
+        setDomainOwner(twitterOwner);
+      }
+      if (destinationAddress.endsWith('.sol')) {
+        const domainOwner = await resolveDomainName(
+          wallet.connection,
+          destinationAddress.slice(0, -4),
+        );
+        if (!domainOwner) {
+          setAddressHelperText(`This domain name is not registered`);
+          setPassValidation(undefined);
+          setShouldShowOverride(undefined);
+          return;
+        }
+        setIsDomainName(true);
+        setDomainOwner(domainOwner);
+      }
       if (!destinationAddress) {
         setAddressHelperText(defaultAddressHelperText);
         setPassValidation(undefined);
@@ -180,7 +263,7 @@ function SendSplDialog({ onClose, publicKey, balanceInfo, onSubmitRef }) {
       }
       try {
         const destinationAccountInfo = await wallet.connection.getAccountInfo(
-          new PublicKey(destinationAddress),
+          new PublicKey(isDomainName ? domainOwner : destinationAddress),
         );
         setShouldShowOverride(false);
 
@@ -197,7 +280,11 @@ function SendSplDialog({ onClose, publicKey, balanceInfo, onSubmitRef }) {
           }
         } else {
           setPassValidation(true);
-          setAddressHelperText('Destination is a Solana address');
+          setAddressHelperText(
+            `Destination is a Solana address: ${
+              isDomainName ? domainOwner : destinationAddress
+            }`,
+          );
         }
       } catch (e) {
         console.log(`Received error validating address ${e}`);
@@ -207,14 +294,12 @@ function SendSplDialog({ onClose, publicKey, balanceInfo, onSubmitRef }) {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [destinationAddress, wallet, mintString]);
-
+  }, [destinationAddress, wallet, mintString, isDomainName, domainOwner]);
   useEffect(() => {
     return () => {
       setOverrideDestinationCheck(false);
     };
   }, [setOverrideDestinationCheck]);
-
   async function makeTransaction() {
     let amount = Math.round(parseFloat(transferAmountString) * 10 ** decimals);
     if (!amount || amount <= 0) {
@@ -222,9 +307,10 @@ function SendSplDialog({ onClose, publicKey, balanceInfo, onSubmitRef }) {
     }
     return wallet.transferToken(
       publicKey,
-      new PublicKey(destinationAddress),
+      new PublicKey(isDomainName ? domainOwner : destinationAddress),
       amount,
       balanceInfo.mint,
+      decimals,
       null,
       overrideDestinationCheck,
     );
@@ -274,6 +360,8 @@ function SendSwapDialog({
   swapCoinInfo,
   ethAccount,
   wusdcToSplUsdc = false,
+  wusdtToSplUsdt = false,
+  usdcToSplWUsdc = false,
   onSubmitRef,
 }) {
   const wallet = useWallet();
@@ -288,11 +376,12 @@ function SendSwapDialog({
   } = useForm(balanceInfo);
 
   const { tokenName, decimals, mint } = balanceInfo;
-  const blockchain = wusdcToSplUsdc
-    ? 'sol'
-    : swapCoinInfo.blockchain === 'sol'
-    ? 'eth'
-    : swapCoinInfo.blockchain;
+  const blockchain =
+    wusdcToSplUsdc || wusdtToSplUsdt || usdcToSplWUsdc
+      ? 'sol'
+      : swapCoinInfo.blockchain === 'sol'
+      ? 'eth'
+      : swapCoinInfo.blockchain;
   const needMetamask = blockchain === 'eth';
 
   const [ethBalance] = useAsyncData(
@@ -323,11 +412,29 @@ function SendSwapDialog({
   let splUsdcWalletAddress = useWalletAddressForMint(
     wusdcToSplUsdc ? USDC_MINT : null,
   );
+  let splUsdtWalletAddress = useWalletAddressForMint(
+    wusdtToSplUsdt ? USDT_MINT : null,
+  );
+  let splWUsdcWalletAddress = useWalletAddressForMint(
+    usdcToSplWUsdc ? WUSDC_MINT : null,
+  );
   useEffect(() => {
     if (wusdcToSplUsdc && splUsdcWalletAddress) {
       setDestinationAddress(splUsdcWalletAddress);
+    } else if (wusdtToSplUsdt && splUsdtWalletAddress) {
+      setDestinationAddress(splUsdtWalletAddress);
+    } else if (usdcToSplWUsdc && splWUsdcWalletAddress) {
+      setDestinationAddress(splWUsdcWalletAddress);
     }
-  }, [setDestinationAddress, wusdcToSplUsdc, splUsdcWalletAddress]);
+  }, [
+    setDestinationAddress,
+    wusdcToSplUsdc,
+    splUsdcWalletAddress,
+    wusdtToSplUsdt,
+    splUsdtWalletAddress,
+    usdcToSplWUsdc,
+    splWUsdcWalletAddress,
+  ]);
 
   async function makeTransaction() {
     let amount = Math.round(parseFloat(transferAmountString) * 10 ** decimals);
@@ -346,6 +453,13 @@ function SendSwapDialog({
     }
     if (mint?.equals(WUSDC_MINT)) {
       params.wusdcToUsdc = true;
+    } else if (mint?.equals(USDC_MINT)) {
+      if (usdcToSplWUsdc) {
+        params.usdcToWUsdc = true;
+        params.coin = WUSDC_MINT.toString();
+      }
+    } else if (mint?.equals(WUSDT_MINT)) {
+      params.wusdtToUsdt = true;
     }
     const swapInfo = await swapApiRequest('POST', 'swap_to', params);
     if (swapInfo.blockchain !== 'sol') {
@@ -356,6 +470,7 @@ function SendSwapDialog({
       new PublicKey(swapInfo.address),
       amount,
       balanceInfo.mint,
+      decimals,
       swapInfo.memo,
     );
   }
@@ -376,7 +491,8 @@ function SendSwapDialog({
       />
     );
   }
-
+  const bitcoinDisable =
+    blockchain === 'btc' ? parseFloat(transferAmountString) < 0.001 : false;
   let sendButton = (
     <Button
       type="submit"
@@ -385,7 +501,8 @@ function SendSwapDialog({
         sending ||
         (needMetamask && !ethAccount) ||
         !validAmount ||
-        insufficientEthBalance
+        insufficientEthBalance ||
+        bitcoinDisable
       }
     >
       Send

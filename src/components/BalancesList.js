@@ -15,15 +15,15 @@ import LoadingIndicator from './LoadingIndicator';
 import Collapse from '@material-ui/core/Collapse';
 import { Typography } from '@material-ui/core';
 import TokenInfoDialog from './TokenInfoDialog';
+import FtxPayDialog from './FtxPay/FtxPayDialog';
 import Link from '@material-ui/core/Link';
 import ExpandLess from '@material-ui/icons/ExpandLess';
 import ExpandMore from '@material-ui/icons/ExpandMore';
 import { makeStyles } from '@material-ui/core/styles';
-import { abbreviateAddress } from '../utils/utils';
+import { abbreviateAddress, useIsExtensionWidth } from '../utils/utils';
 import Button from '@material-ui/core/Button';
 import SendIcon from '@material-ui/icons/Send';
 import ReceiveIcon from '@material-ui/icons/WorkOutline';
-import DeleteIcon from '@material-ui/icons/Delete';
 import AppBar from '@material-ui/core/AppBar';
 import Toolbar from '@material-ui/core/Toolbar';
 import AddIcon from '@material-ui/icons/Add';
@@ -34,9 +34,10 @@ import Tooltip from '@material-ui/core/Tooltip';
 import EditIcon from '@material-ui/icons/Edit';
 import MergeType from '@material-ui/icons/MergeType';
 import SortIcon from '@material-ui/icons/Sort';
-import FingerprintIcon from '@material-ui/icons/Fingerprint';
+import DeleteIcon from '@material-ui/icons/Delete';
 import AddTokenDialog from './AddTokenDialog';
 import ExportAccountDialog from './ExportAccountDialog';
+import ftxPayIcon from './FtxPay/icon.png';
 import SendDialog from './SendDialog';
 import DepositDialog from './DepositDialog';
 import {
@@ -55,6 +56,9 @@ import ListItemIcon from '@material-ui/core/ListItemIcon';
 import TokenIcon from './TokenIcon';
 import EditAccountNameDialog from './EditAccountNameDialog';
 import MergeAccountsDialog from './MergeAccountsDialog';
+import SwapButton from './SwapButton';
+import DnsIcon from '@material-ui/icons/Dns';
+import DomainsList from './DomainsList';
 
 const balanceFormat = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 4,
@@ -104,8 +108,11 @@ export default function BalancesList() {
     false,
   );
   const [showMergeAccounts, setShowMergeAccounts] = useState(false);
+  const [showFtxPayDialog, setShowFtxPayDialog] = useState(false);
   const [sortAccounts, setSortAccounts] = useState(SortAccounts.None);
+  const [showDomains, setShowDomains] = useState(false);
   const { accounts, setAccountName } = useWalletSelector();
+  const isExtensionWidth = useIsExtensionWidth();
   // Dummy var to force rerenders on demand.
   const [, setForceUpdate] = useState(false);
   const selectedAccount = accounts.find((a) => a.isSelected);
@@ -182,12 +189,19 @@ export default function BalancesList() {
     });
   }, [sortedPublicKeys, setUsdValuesCallback]);
 
+  const iconSize = isExtensionWidth ? 'small' : 'medium';
+
   return (
     <Paper>
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
-          <Typography variant="h6" style={{ flexGrow: 1 }} component="h2">
-            {selectedAccount && selectedAccount.name} Balances{' '}
+          <Typography
+            variant="h6"
+            style={{ flexGrow: 1, fontSize: isExtensionWidth && '1rem' }}
+            component="h2"
+          >
+            {selectedAccount && selectedAccount.name}
+            {isExtensionWidth ? '' : ' Balances'}{' '}
             {allTokensLoaded && (
               <>({numberFormat.format(totalUsdValue.toFixed(2))})</>
             )}
@@ -196,23 +210,56 @@ export default function BalancesList() {
             selectedAccount.name !== 'Main account' &&
             selectedAccount.name !== 'Hardware wallet' && (
               <Tooltip title="Edit Account Name" arrow>
-                <IconButton onClick={() => setShowEditAccountNameDialog(true)}>
+                <IconButton
+                  size={iconSize}
+                  onClick={() => setShowEditAccountNameDialog(true)}
+                >
                   <EditIcon />
                 </IconButton>
               </Tooltip>
             )}
-          <Tooltip title="Merge Accounts" arrow>
-            <IconButton onClick={() => setShowMergeAccounts(true)}>
+          <Tooltip title="Deposit via FTX Pay" arrow>
+            <IconButton
+              size={iconSize}
+              onClick={() => setShowFtxPayDialog(true)}
+            >
+              <img
+                title={'FTX Pay'}
+                alt={'FTX Pay'}
+                style={{
+                  width: 20,
+                  height: 20,
+                }}
+                src={ftxPayIcon}
+              />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="See your domains" arrow>
+            <IconButton size={iconSize} onClick={() => setShowDomains(true)}>
+              <DnsIcon />
+            </IconButton>
+          </Tooltip>
+          <DomainsList open={showDomains} setOpen={setShowDomains} />
+          <SwapButton size={iconSize} />
+          <Tooltip title="Migrate Tokens" arrow>
+            <IconButton
+              size={iconSize}
+              onClick={() => setShowMergeAccounts(true)}
+            >
               <MergeType />
             </IconButton>
           </Tooltip>
           <Tooltip title="Add Token" arrow>
-            <IconButton onClick={() => setShowAddTokenDialog(true)}>
+            <IconButton
+              size={iconSize}
+              onClick={() => setShowAddTokenDialog(true)}
+            >
               <AddIcon />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Sort Accounts" arrow>
+          <Tooltip title="Sort Tokens" arrow>
             <IconButton
+              size={iconSize}
               onClick={() => {
                 switch (sortAccounts) {
                   case SortAccounts.None:
@@ -234,6 +281,7 @@ export default function BalancesList() {
           </Tooltip>
           <Tooltip title="Refresh" arrow>
             <IconButton
+              size={iconSize}
               onClick={() => {
                 refreshWalletPublicKeys(wallet);
                 publicKeys.map((publicKey) =>
@@ -256,6 +304,11 @@ export default function BalancesList() {
       <AddTokenDialog
         open={showAddTokenDialog}
         onClose={() => setShowAddTokenDialog(false)}
+      />
+      <FtxPayDialog
+        open={showFtxPayDialog}
+        publicKeys={publicKeys}
+        onClose={() => setShowFtxPayDialog(false)}
       />
       <EditAccountNameDialog
         open={showEditAccountNameDialog}
@@ -298,6 +351,7 @@ export function BalanceListItem({ publicKey, expandable, setUsdValue }) {
   const classes = useStyles();
   const connection = useConnection();
   const [open, setOpen] = useState(false);
+  const isExtensionWidth = useIsExtensionWidth();
   const [, setForceUpdate] = useState(false);
   // Valid states:
   //   * undefined => loading.
@@ -343,7 +397,21 @@ export function BalanceListItem({ publicKey, expandable, setUsdValue }) {
     return <LoadingIndicator delay={0} />;
   }
 
-  let { amount, decimals, mint, tokenName, tokenSymbol } = balanceInfo;
+  let {
+    amount,
+    decimals,
+    mint,
+    tokenName,
+    tokenSymbol,
+    tokenLogoUri,
+  } = balanceInfo;
+  tokenName = tokenName ?? abbreviateAddress(mint);
+  let displayName;
+  if (isExtensionWidth) {
+    displayName = tokenSymbol ?? tokenName;
+  } else {
+    displayName = tokenName + (tokenSymbol ? ` (${tokenSymbol})` : '');
+  }
 
   // Fetch and cache the associated token address.
   if (wallet && wallet.publicKey && mint) {
@@ -367,39 +435,39 @@ export function BalanceListItem({ publicKey, expandable, setUsdValue }) {
     }
   }
 
-  const isAssociatedToken =
+  // undefined => not loaded.
+  let isAssociatedToken = mint ? undefined : false;
+  if (
     wallet &&
     wallet.publicKey &&
     mint &&
     associatedTokensCache[wallet.publicKey.toString()]
-      ? associatedTokensCache[wallet.publicKey.toString()][mint.toString()]
-      : false;
+  ) {
+    let acc =
+      associatedTokensCache[wallet.publicKey.toString()][mint.toString()];
+    if (acc) {
+      if (acc.equals(publicKey)) {
+        isAssociatedToken = true;
+      } else {
+        isAssociatedToken = false;
+      }
+    }
+  }
 
-  const subtitle = (
-    <div style={{ display: 'flex', height: '20px', overflow: 'hidden' }}>
-      {isAssociatedToken && (
+  const subtitle =
+    isExtensionWidth || !publicKey.equals(balanceInfo.owner) ? undefined : (
+      <div style={{ display: 'flex', height: '20px', overflow: 'hidden' }}>
         <div
           style={{
             display: 'flex',
             justifyContent: 'center',
             flexDirection: 'column',
-            marginRight: '5px',
           }}
         >
-          <FingerprintIcon style={{ width: '20px' }} />
+          {publicKey.toBase58()}
         </div>
-      )}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          flexDirection: 'column',
-        }}
-      >
-        {publicKey.toBase58()}
       </div>
-    </div>
-  );
+    );
 
   const usdValue =
     price === undefined // Not yet loaded.
@@ -415,15 +483,19 @@ export function BalanceListItem({ publicKey, expandable, setUsdValue }) {
     <>
       <ListItem button onClick={() => expandable && setOpen((open) => !open)}>
         <ListItemIcon>
-          <TokenIcon mint={mint} tokenName={tokenName} size={28} />
+          <TokenIcon
+            mint={mint}
+            tokenName={tokenName}
+            url={tokenLogoUri}
+            size={28}
+          />
         </ListItemIcon>
         <div style={{ display: 'flex', flex: 1 }}>
           <ListItemText
             primary={
               <>
                 {balanceFormat.format(amount / Math.pow(10, decimals))}{' '}
-                {tokenName ?? abbreviateAddress(mint)}
-                {tokenSymbol ? ` (${tokenSymbol})` : null}
+                {displayName}
               </>
             }
             secondary={subtitle}
@@ -445,18 +517,26 @@ export function BalanceListItem({ publicKey, expandable, setUsdValue }) {
         </div>
         {expandable ? open ? <ExpandLess /> : <ExpandMore /> : <></>}
       </ListItem>
-      <Collapse in={open} timeout="auto" unmountOnExit>
-        <BalanceListItemDetails
-          publicKey={publicKey}
-          serumMarkets={serumMarkets}
-          balanceInfo={balanceInfo}
-        />
-      </Collapse>
+      {expandable && (
+        <Collapse in={open} timeout="auto" unmountOnExit>
+          <BalanceListItemDetails
+            isAssociatedToken={isAssociatedToken}
+            publicKey={publicKey}
+            serumMarkets={serumMarkets}
+            balanceInfo={balanceInfo}
+          />
+        </Collapse>
+      )}
     </>
   );
 }
 
-function BalanceListItemDetails({ publicKey, serumMarkets, balanceInfo }) {
+function BalanceListItemDetails({
+  publicKey,
+  serumMarkets,
+  balanceInfo,
+  isAssociatedToken,
+}) {
   const urlSuffix = useSolanaExplorerUrlSuffix();
   const classes = useStyles();
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -489,6 +569,7 @@ function BalanceListItemDetails({ publicKey, serumMarkets, balanceInfo }) {
     balanceInfo.mint?.toBase58(),
     publicKey.toBase58(),
   ]);
+  const isExtensionWidth = useIsExtensionWidth();
 
   if (!balanceInfo) {
     return <LoadingIndicator delay={0} />;
@@ -505,6 +586,82 @@ function BalanceListItemDetails({ publicKey, serumMarkets, balanceInfo }) {
       ? serumMarkets[tokenSymbol.toUpperCase()].publicKey
       : undefined
     : undefined;
+  const isSolAddress = publicKey.equals(owner);
+  const additionalInfo = isExtensionWidth ? undefined : (
+    <>
+      <Typography variant="body2">
+        Token Name: {tokenName ?? 'Unknown'}
+      </Typography>
+      <Typography variant="body2">
+        Token Symbol: {tokenSymbol ?? 'Unknown'}
+      </Typography>
+      {mint ? (
+        <Typography variant="body2" className={classes.address}>
+          Token Address: {mint.toBase58()}
+        </Typography>
+      ) : null}
+      {!isSolAddress && (
+        <Typography variant="body2" className={classes.address}>
+          {isAssociatedToken ? 'Associated' : ''} Token Metadata:{' '}
+          {publicKey.toBase58()}
+        </Typography>
+      )}
+      {!isSolAddress && isAssociatedToken === false && (
+        <div style={{ display: 'flex' }}>
+          This is an auxiliary token account.
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div>
+          <Typography variant="body2">
+            <Link
+              href={
+                `https://solscan.io/account/${publicKey.toBase58()}` + urlSuffix
+              }
+              target="_blank"
+              rel="noopener"
+            >
+              View on Solscan
+            </Link>
+          </Typography>
+          {market && (
+            <Typography variant="body2">
+              <Link
+                href={`https://dex.projectserum.com/#/market/${market}`}
+                target="_blank"
+                rel="noopener"
+              >
+                View on Serum
+              </Link>
+            </Typography>
+          )}
+          {swapInfo && swapInfo.coin.erc20Contract && (
+            <Typography variant="body2">
+              <Link
+                href={
+                  `https://etherscan.io/token/${swapInfo.coin.erc20Contract}` +
+                  urlSuffix
+                }
+                target="_blank"
+                rel="noopener"
+              >
+                View on Ethereum
+              </Link>
+            </Typography>
+          )}
+        </div>
+        {exportNeedsDisplay && wallet.allowsExport && (
+          <div>
+            <Typography variant="body2">
+              <Link href={'#'} onClick={(e) => setExportAccDialogOpen(true)}>
+                Export
+              </Link>
+            </Typography>
+          </div>
+        )}
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -542,7 +699,9 @@ function BalanceListItemDetails({ publicKey, serumMarkets, balanceInfo }) {
           >
             Send
           </Button>
-          {mint && amount === 0 ? (
+          {localStorage.getItem('warning-close-account') &&
+          mint &&
+          amount === 0 ? (
             <Button
               variant="outlined"
               color="secondary"
@@ -554,70 +713,7 @@ function BalanceListItemDetails({ publicKey, serumMarkets, balanceInfo }) {
             </Button>
           ) : null}
         </div>
-        <Typography variant="body2" className={classes.address}>
-          Deposit Address: {publicKey.toBase58()}
-        </Typography>
-        <Typography variant="body2">
-          Token Name: {tokenName ?? 'Unknown'}
-        </Typography>
-        <Typography variant="body2">
-          Token Symbol: {tokenSymbol ?? 'Unknown'}
-        </Typography>
-        {mint ? (
-          <Typography variant="body2" className={classes.address}>
-            Token Address: {mint.toBase58()}
-          </Typography>
-        ) : null}
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <div>
-            <Typography variant="body2">
-              <Link
-                href={
-                  `https://explorer.solana.com/account/${publicKey.toBase58()}` +
-                  urlSuffix
-                }
-                target="_blank"
-                rel="noopener"
-              >
-                View on Solana
-              </Link>
-            </Typography>
-            {market && (
-              <Typography variant="body2">
-                <Link
-                  href={`https://dex.projectserum.com/#/market/${market}`}
-                  target="_blank"
-                  rel="noopener"
-                >
-                  View on Serum
-                </Link>
-              </Typography>
-            )}
-            {swapInfo && swapInfo.coin.erc20Contract && (
-              <Typography variant="body2">
-                <Link
-                  href={
-                    `https://etherscan.io/token/${swapInfo.coin.erc20Contract}` +
-                    urlSuffix
-                  }
-                  target="_blank"
-                  rel="noopener"
-                >
-                  View on Ethereum
-                </Link>
-              </Typography>
-            )}
-          </div>
-          {exportNeedsDisplay && wallet.allowsExport && (
-            <div>
-              <Typography variant="body2">
-                <Link href={'#'} onClick={(e) => setExportAccDialogOpen(true)}>
-                  Export
-                </Link>
-              </Typography>
-            </div>
-          )}
-        </div>
+        {additionalInfo}
       </div>
       <SendDialog
         open={sendDialogOpen}
@@ -631,6 +727,7 @@ function BalanceListItemDetails({ publicKey, serumMarkets, balanceInfo }) {
         balanceInfo={balanceInfo}
         publicKey={publicKey}
         swapInfo={swapInfo}
+        isAssociatedToken={isAssociatedToken}
       />
       <TokenInfoDialog
         open={tokenInfoDialogOpen}

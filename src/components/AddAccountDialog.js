@@ -7,7 +7,7 @@ import TextField from '@material-ui/core/TextField';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import FormGroup from '@material-ui/core/FormGroup';
 import Switch from '@material-ui/core/Switch';
-import { Account } from '@solana/web3.js';
+import { decodeAccount } from '../utils/utils';
 import DialogForm from './DialogForm';
 
 export default function AddAccountDialog({ open, onAdd, onClose }) {
@@ -80,18 +80,4 @@ export default function AddAccountDialog({ open, onAdd, onClose }) {
       </DialogActions>
     </DialogForm>
   );
-}
-
-/**
- * Returns an account object when given the private key
- *
- * @param {string} privateKey - the private key in array format
- */
-function decodeAccount(privateKey) {
-  try {
-    const a = new Account(JSON.parse(privateKey));
-    return a;
-  } catch (_) {
-    return undefined;
-  }
 }

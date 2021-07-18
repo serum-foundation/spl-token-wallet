@@ -30,11 +30,6 @@ LAYOUT.addVariant(
 );
 LAYOUT.addVariant(1, BufferLayout.struct([]), 'initializeAccount');
 LAYOUT.addVariant(
-  3,
-  BufferLayout.struct([BufferLayout.nu64('amount')]),
-  'transfer',
-);
-LAYOUT.addVariant(
   7,
   BufferLayout.struct([BufferLayout.nu64('amount')]),
   'mintTo',
@@ -45,6 +40,11 @@ LAYOUT.addVariant(
   'burn',
 );
 LAYOUT.addVariant(9, BufferLayout.struct([]), 'closeAccount');
+LAYOUT.addVariant(
+  12,
+  BufferLayout.struct([BufferLayout.nu64('amount'), BufferLayout.u8('decimals')]),
+  'transferChecked',
+);
 
 const instructionMaxSpan = Math.max(
   ...Object.values(LAYOUT.registry).map((r) => r.span),
@@ -96,16 +96,17 @@ export function initializeAccount({ account, mint, owner }) {
   });
 }
 
-export function transfer({ source, destination, amount, owner }) {
+export function transferChecked({ source, mint, destination, amount, decimals, owner }) {
   let keys = [
     { pubkey: source, isSigner: false, isWritable: true },
+    { pubkey: mint, isSigner: false, isWritable: false },
     { pubkey: destination, isSigner: false, isWritable: true },
     { pubkey: owner, isSigner: true, isWritable: false },
   ];
   return new TransactionInstruction({
     keys,
     data: encodeTokenInstructionData({
-      transfer: { amount },
+      transferChecked: { amount, decimals },
     }),
     programId: TOKEN_PROGRAM_ID,
   });
@@ -168,7 +169,6 @@ class PublicKeyLayout extends BufferLayout.Blob {
 function publicKeyLayout(property) {
   return new PublicKeyLayout(property);
 }
-
 
 export const OWNER_VALIDATION_PROGRAM_ID = new PublicKey(
   '4MNPdKu9wFMvEeZBMt3Eipfs5ovVWTJb31pEXDJAAxX5',

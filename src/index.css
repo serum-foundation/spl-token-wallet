@@ -7,10 +7,38 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+
+/* TODO consolidate popup dimensions */
 html,
 body,
 #root {
+  min-width: 375px;
+  min-height: 600px;
   height: 100%;
+}
+
+/* TODO consolidate popup dimensions */
+@media screen and (max-height: 700px) {
+  html,
+  body,
+  #root {
+    max-height: 600px;
+  }
+}
+
+/* TODO consolidate popup dimensions */
+@media screen and (max-width: 450px) {
+  html,
+  body,
+  #root {
+    max-width: 375px;
+  }
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  #root::-webkit-scrollbar { 
+      width: 1px;
+      background: transparent;
+  }
 }
 
 #root {

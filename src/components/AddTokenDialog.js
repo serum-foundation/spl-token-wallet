@@ -11,7 +11,7 @@ import {
   useWalletTokenAccounts,
 } from '../utils/wallet';
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { TOKENS, useUpdateTokenName } from '../utils/tokens/names';
+import { useUpdateTokenName, usePopularTokens } from '../utils/tokens/names';
 import { useAsyncData } from '../utils/fetch-loop';
 import LoadingIndicator from './LoadingIndicator';
 import { makeStyles, Tab, Tabs } from '@material-ui/core';
@@ -24,10 +24,7 @@ import { abbreviateAddress } from '../utils/utils';
 import ExpandLess from '@material-ui/icons/ExpandLess';
 import ExpandMore from '@material-ui/icons/ExpandMore';
 import Collapse from '@material-ui/core/Collapse';
-import {
-  useConnectionConfig,
-  useSolanaExplorerUrlSuffix,
-} from '../utils/connection';
+import { useSolanaExplorerUrlSuffix } from '../utils/connection';
 import Link from '@material-ui/core/Link';
 import CopyableDisplay from './CopyableDisplay';
 import DialogForm from './DialogForm';
@@ -56,10 +53,9 @@ export default function AddTokenDialog({ open, onClose }) {
   let classes = useStyles();
   let updateTokenName = useUpdateTokenName();
   const [sendTransaction, sending] = useSendTransaction();
-  const { endpoint } = useConnectionConfig();
-  const popularTokens = TOKENS[endpoint];
-  const [walletAccounts] = useWalletTokenAccounts();
 
+  const [walletAccounts] = useWalletTokenAccounts();
+  const popularTokens = usePopularTokens();
   const [tab, setTab] = useState(!!popularTokens ? 'popular' : 'manual');
   const [mintAddress, setMintAddress] = useState('');
   const [tokenName, setTokenName] = useState('');
@@ -171,20 +167,18 @@ export default function AddTokenDialog({ open, onClose }) {
           </React.Fragment>
         ) : tab === 'popular' ? (
           <List disablePadding>
-            {popularTokens
-              .filter((token) => !token.deprecated)
-              .map((token) => (
-                <TokenListItem
-                  key={token.mintAddress}
-                  {...token}
-                  existingAccount={(walletAccounts || []).find(
-                    (account) =>
-                      account.parsed.mint.toBase58() === token.mintAddress,
-                  )}
-                  onSubmit={onSubmit}
-                  disalbed={sending}
-                />
-              ))}
+            {popularTokens.filter(tokenInfo => tokenInfo.address).map((tokenInfo) => (
+              <TokenListItem
+                key={tokenInfo.address}
+                tokenInfo={tokenInfo}
+                existingAccount={(walletAccounts || []).find(
+                  (account) =>
+                    account.parsed.mint.toBase58() === tokenInfo.address,
+                )}
+                onSubmit={onSubmit}
+                disabled={sending}
+              />
+            ))}
           </List>
         ) : tab === 'erc20' ? (
           <>
@@ -227,24 +221,21 @@ export default function AddTokenDialog({ open, onClose }) {
   );
 }
 
-function TokenListItem({
-  tokenName,
-  icon,
-  tokenSymbol,
-  mintAddress,
-  onSubmit,
-  disabled,
-  existingAccount,
-}) {
+function TokenListItem({ tokenInfo, onSubmit, disabled, existingAccount }) {
   const [open, setOpen] = useState(false);
   const urlSuffix = useSolanaExplorerUrlSuffix();
   const alreadyExists = !!existingAccount;
+
   return (
     <React.Fragment>
-      <div style={{ display: 'flex' }} key={tokenName}>
+      <div style={{ display: 'flex' }} key={tokenInfo.name}>
         <ListItem button onClick={() => setOpen((open) => !open)}>
           <ListItemIcon>
-            <TokenIcon url={icon} tokenName={tokenName} size={20} />
+            <TokenIcon
+              url={tokenInfo.logoUri}
+              tokenName={tokenInfo.name}
+              size={20}
+            />
           </ListItemIcon>
           <ListItemText
             primary={
@@ -252,12 +243,12 @@ function TokenListItem({
                 target="_blank"
                 rel="noopener"
                 href={
-                  `https://explorer.solana.com/account/${mintAddress}` +
+                  `https://solscan.io/account/${tokenInfo.address}` +
                   urlSuffix
                 }
               >
-                {tokenName ?? abbreviateAddress(mintAddress)}
-                {tokenSymbol ? ` (${tokenSymbol})` : null}
+                {tokenInfo.name ?? abbreviateAddress(tokenInfo.address)}
+                {tokenInfo.symbol ? ` (${tokenInfo.symbol})` : null}
               </Link>
             }
           />
@@ -267,15 +258,21 @@ function TokenListItem({
           type="submit"
           color="primary"
           disabled={disabled || alreadyExists}
-          onClick={() => onSubmit({ tokenName, tokenSymbol, mintAddress })}
+          onClick={() =>
+            onSubmit({
+              tokenName: tokenInfo.name,
+              tokenSymbol: tokenInfo.symbol,
+              mintAddress: tokenInfo.address,
+            })
+          }
         >
           {alreadyExists ? 'Added' : 'Add'}
         </Button>
       </div>
       <Collapse in={open} timeout="auto" unmountOnExit>
         <CopyableDisplay
-          value={mintAddress}
-          label={`${tokenSymbol} Mint Address`}
+          value={tokenInfo.address}
+          label={`${tokenInfo.symbol} Mint Address`}
         />
       </Collapse>
     </React.Fragment>

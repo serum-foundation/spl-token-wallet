@@ -9,17 +9,23 @@ const TYPE_LABELS = {
   initializeAccount: 'Initialize account',
   transfer: 'Transfer',
   approve: 'Approve',
+  revoke: 'Revoke',
   mintTo: 'Mint to',
   closeAccount: 'Close account',
 };
 
 const DATA_LABELS = {
-  amount: { label: 'Amount', address: false },
-  accountPubkey: { label: 'Account', address: true },
-  mintPubkey: { label: 'Mint', address: true },
-  sourcePubkey: { label: 'Source', address: true },
-  destinationPubkey: { label: 'Destination', address: true },
-  ownerPubkey: { label: 'Owner', address: true },
+  amount: { label: 'Amount', address: false, transform: (amount) => amount.toString()},
+  authorityType: { label: 'Authority type', address: false },
+  currentAuthority: { label: 'Current authority', address: true },
+  decimals: { label: 'Decimals', address: false },
+  delegate: { label: 'Delegate', address: true },
+  destination: { label: 'Destination', address: true },
+  mint: { label: 'Mint', address: true },
+  mintAuthority: { label: 'Mint authority', address: true },
+  newAuthority: { label: 'New authority', address: true },
+  owner: { label: 'Owner', address: true },
+  source: { label: 'Source', address: true },
 };
 
 export default function TokenInstruction({ instruction, onOpenAddress }) {
@@ -55,12 +61,12 @@ export default function TokenInstruction({ instruction, onOpenAddress }) {
           if (!dataLabel) {
             return null;
           }
-          const { label, address } = dataLabel;
+          const { label, address, transform } = dataLabel;
           return (
             <LabelValue
               key={key}
               label={label + ''}
-              value={address ? getAddressValue(value) : value}
+              value={address ? getAddressValue(value) : transform ? transform(value) : value}
               link={address}
               onClick={() => address && onOpenAddress(value?.toBase58())}
             />

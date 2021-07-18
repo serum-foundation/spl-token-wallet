@@ -1,9 +1,24 @@
+import React, { useContext, useState, useEffect } from 'react';
 import EventEmitter from 'events';
-import { useConnectionConfig, MAINNET_URL } from '../connection';
+import {
+  useConnectionConfig,
+  MAINNET_URL,
+  MAINNET_BACKUP_URL,
+} from '../connection';
 import { useListener } from '../utils';
+import { clusterForEndpoint } from '../clusters';
 import { useCallback } from 'react';
+import { PublicKey } from '@solana/web3.js';
+import { TokenListProvider } from '@solana/spl-token-registry';
 
-export const TOKENS = {
+// This list is used for deciding what to display in the popular tokens list
+// in the `AddTokenDialog`.
+//
+// Icons, names, and symbols are fetched not from here, but from the
+// @solana/spl-token-registry. To add an icon or token name to the wallet,
+// add the mints to that package. To add a token to the `AddTokenDialog`,
+// add the `mintAddress` here. The rest of the fields are not used.
+const POPULAR_TOKENS = {
   [MAINNET_URL]: [
     {
       mintAddress: 'SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt',
@@ -63,8 +78,15 @@ export const TOKENS = {
     },
     {
       tokenSymbol: 'USDT',
+      mintAddress: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+      tokenName: 'USDT',
+      icon:
+        'https://cdn.jsdelivr.net/gh/solana-labs/explorer/public/tokens/usdt.svg',
+    },
+    {
+      tokenSymbol: 'WUSDT',
       mintAddress: 'BQcdHdAQW1hczDbBi9hiegXAR7A98Q9jx3X3iBBBDiq4',
-      tokenName: 'Wrapped USDT',
+      tokenName: 'Wrapped USD Tether',
       icon:
         'https://raw.githubusercontent.com/trustwallet/assets/f3ffd0b9ae2165336279ce2f8db1981a55ce30f8/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
     },
@@ -215,25 +237,46 @@ export const TOKENS = {
         'https://raw.githubusercontent.com/raydium-io/media-assets/master/logo.svg',
     },
     {
-      tokenSymbol: 'RAY-USDT',
-      mintAddress: 'CzPDyvotTcxNqtPne32yUiEVQ6jk42HZi1Y3hUu7qf7f',
-      tokenName: 'Raydium USDT Liquidity Pool',
+      tokenSymbol: 'OXY',
+      mintAddress: 'z3dn17yLaGMKffVogeFHQ9zWVcXgqgf3PQnDsNs2g6M',
+      tokenName: 'Oxygen Protocol',
       icon:
-        'https://raw.githubusercontent.com/raydium-io/media-assets/master/logo.svg',
+        'https://raw.githubusercontent.com/nathanielparke/awesome-serum-markets/master/icons/oxy.svg',
     },
     {
-      tokenSymbol: 'RAY-USDC',
-      mintAddress: 'FgmBnsF5Qrnv8X9bomQfEtQTQjNNiBCWRKGpzPnE5BDg',
-      tokenName: 'Raydium USDC Liquidity Pool',
+      tokenSymbol: 'COPE',
+      mintAddress: '3K6rftdAaQYMPunrtNRHgnK2UAtjm2JwyT2oCiTDouYE',
+      tokenName: 'COPE',
       icon:
-        'https://raw.githubusercontent.com/raydium-io/media-assets/master/logo.svg',
+        'https://cdn.jsdelivr.net/gh/solana-labs/token-list/assets/mainnet/3K6rftdAaQYMPunrtNRHgnK2UAtjm2JwyT2oCiTDouYE/logo.jpg',
     },
     {
-      tokenSymbol: 'RAY-SRM',
-      mintAddress: '5QXBMXuCL7zfAk39jEVVEvcrz1AvBGgT9wAhLLHLyyUJ',
-      tokenName: 'Raydium Serum Liquidity Pool',
+      tokenSymbol: 'BRZ',
+      mintAddress: 'FtgGSFADXBtroxq8VCausXRr2of47QBf5AS1NtZCu4GD',
+      tokenName: 'Brazilian Digital Token',
       icon:
-        'https://raw.githubusercontent.com/raydium-io/media-assets/master/logo.svg',
+        'https://cdn.jsdelivr.net/gh/solana-labs/explorer/public/tokens/brz.png',
+    },
+    {
+      tokenSymbol: 'STEP',
+      mintAddress: 'StepAscQoEioFxxWGnh2sLBDFp9d8rvKz2Yp39iDpyT',
+      tokenName: 'Step',
+      icon:
+        'https://cdn.jsdelivr.net/gh/solana-labs/token-list/assets/mainnet/StepAscQoEioFxxWGnh2sLBDFp9d8rvKz2Yp39iDpyT/logo.png',
+    },
+    {
+      tokenSymbol: 'SLRS',
+      mintAddress: 'SLRSSpSLUTP7okbCUBYStWCo1vUgyt775faPqz8HUMr',
+      tokenName: 'Solrise Finance',
+      icon:
+        'https://i.ibb.co/tqbTKTT/slrs-256.png',
+    },
+    {
+      tokenSymbol: 'SAMO',
+      mintAddress: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
+      tokenName: 'Samoyed Coin',
+      icon:
+        'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU/logo.png',
     },
     {
       tokenSymbol: 'OXY',
@@ -245,6 +288,40 @@ export const TOKENS = {
   ],
 };
 
+const TokenListContext = React.createContext({});
+
+export function useTokenInfos() {
+  const { tokenInfos } = useContext(TokenListContext);
+  return tokenInfos;
+}
+
+export function TokenRegistryProvider(props) {
+  const { endpoint } = useConnectionConfig();
+  const [tokenInfos, setTokenInfos] = useState(null);
+  useEffect(() => {
+    if (endpoint !== MAINNET_BACKUP_URL && endpoint !== MAINNET_URL) return;
+    const tokenListProvider = new TokenListProvider();
+    tokenListProvider.resolve().then((tokenListContainer) => {
+      const cluster = clusterForEndpoint(endpoint);
+
+      const filteredTokenListContainer = tokenListContainer?.filterByClusterSlug(
+        cluster?.clusterSlug,
+      );
+      const tokenInfos =
+        tokenListContainer !== filteredTokenListContainer
+          ? filteredTokenListContainer?.getList()
+          : null; // Workaround for filter return all on unknown slug
+      setTokenInfos(tokenInfos);
+    });
+  }, [endpoint]);
+
+  return (
+    <TokenListContext.Provider value={{ tokenInfos }}>
+      {props.children}
+    </TokenListContext.Provider>
+  );
+}
+
 const customTokenNamesByNetwork = JSON.parse(
   localStorage.getItem('tokenNames') ?? '{}',
 );
@@ -252,25 +329,33 @@ const customTokenNamesByNetwork = JSON.parse(
 const nameUpdated = new EventEmitter();
 nameUpdated.setMaxListeners(100);
 
-export function useTokenName(mint) {
+export function useTokenInfo(mint) {
   const { endpoint } = useConnectionConfig();
   useListener(nameUpdated, 'update');
-  return getTokenName(mint, endpoint);
+  const tokenInfos = useTokenInfos();
+  return getTokenInfo(mint, endpoint, tokenInfos);
 }
 
-export function getTokenName(mint, endpoint) {
+export function getTokenInfo(mint, endpoint, tokenInfos) {
   if (!mint) {
     return { name: null, symbol: null };
   }
 
   let info = customTokenNamesByNetwork?.[endpoint]?.[mint.toBase58()];
-  let match = TOKENS?.[endpoint]?.find(
-    (token) => token.mintAddress === mint.toBase58(),
+  let match = tokenInfos?.find(
+    (tokenInfo) => tokenInfo.address === mint.toBase58(),
   );
-  if (match && (!info || match.deprecated)) {
-    info = { name: match.tokenName, symbol: match.tokenSymbol };
+
+  if (match) {
+    if (!info) {
+      info = { ...match, logoUri: match.logoURI };
+    }
+    // The user has overridden a name locally.
+    else {
+      info = { ...match, ...info, logoUri: match.logoURI };
+    }
   }
-  return { name: info?.name, symbol: info?.symbol };
+  return { ...info };
 }
 
 export function useUpdateTokenName() {
@@ -297,5 +382,16 @@ export function useUpdateTokenName() {
       nameUpdated.emit('update');
     },
     [endpoint],
+  );
+}
+// Returns tokenInfos for the popular tokens list.
+export function usePopularTokens() {
+  const tokenInfos = useTokenInfos();
+  const { endpoint } = useConnectionConfig();
+  return (!POPULAR_TOKENS[endpoint]
+    ? []
+    : POPULAR_TOKENS[endpoint]
+  ).map((tok) =>
+    getTokenInfo(new PublicKey(tok.mintAddress), endpoint, tokenInfos),
   );
 }

@@ -62,8 +62,9 @@ export default function DebugButtons() {
 
   const noSol = amount === 0;
   const requestAirdropDisabled = endpoint === MAINNET_URL;
+  const spacing = 24;
   return (
-    <div style={{ display: 'flex' }}>
+    <div style={{ display: 'flex', marginLeft: spacing }}>
       <Tooltip
         title={
           requestAirdropDisabled
@@ -95,7 +96,7 @@ export default function DebugButtons() {
             color="primary"
             onClick={mintTestToken}
             disabled={sending || noSol}
-            style={{ marginLeft: 24 }}
+            style={{ marginLeft: spacing }}
           >
             Mint Test Token
           </Button>

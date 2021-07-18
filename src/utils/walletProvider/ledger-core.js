@@ -1,4 +1,5 @@
 import { PublicKey } from '@solana/web3.js';
+import { DERIVATION_PATH } from './localStorage';
 const bs58 = require('bs58');
 
 const INS_GET_PUBKEY = 0x05;
@@ -60,21 +61,43 @@ function _harden(n) {
   return (n | BIP32_HARDENED_BIT) >>> 0;
 }
 
-export function solana_derivation_path(account, change) {
-  const length = 4;
+export function solana_derivation_path(account, change, derivationPath) {
   let useAccount = account ? account : 0;
   let useChange = change ? change : 0;
+  derivationPath = derivationPath
+    ? derivationPath
+    : DERIVATION_PATH.bip44Change;
 
-  var derivation_path = Buffer.alloc(1 + length * 4);
-  // eslint-disable-next-line
-  var offset = 0;
-  offset = derivation_path.writeUInt8(length, offset);
-  offset = derivation_path.writeUInt32BE(_harden(44), offset); // Using BIP44
-  offset = derivation_path.writeUInt32BE(_harden(501), offset); // Solana's BIP44 path
-  offset = derivation_path.writeUInt32BE(_harden(useAccount), offset);
-  derivation_path.writeUInt32BE(_harden(useChange), offset);
-
-  return derivation_path;
+  if (derivationPath === DERIVATION_PATH.bip44Root) {
+    const length = 2;
+    const derivation_path = Buffer.alloc(1 + length * 4);
+    let offset = 0;
+    offset = derivation_path.writeUInt8(length, offset);
+    offset = derivation_path.writeUInt32BE(_harden(44), offset); // Using BIP44
+    derivation_path.writeUInt32BE(_harden(501), offset); // Solana's BIP44 path
+    return derivation_path;
+  } else if (derivationPath === DERIVATION_PATH.bip44) {
+    const length = 3;
+    const derivation_path = Buffer.alloc(1 + length * 4);
+    let offset = 0;
+    offset = derivation_path.writeUInt8(length, offset);
+    offset = derivation_path.writeUInt32BE(_harden(44), offset); // Using BIP44
+    offset = derivation_path.writeUInt32BE(_harden(501), offset); // Solana's BIP44 path
+    derivation_path.writeUInt32BE(_harden(useAccount), offset);
+    return derivation_path;
+  } else if (derivationPath === DERIVATION_PATH.bip44Change) {
+    const length = 4;
+    const derivation_path = Buffer.alloc(1 + length * 4);
+    let offset = 0;
+    offset = derivation_path.writeUInt8(length, offset);
+    offset = derivation_path.writeUInt32BE(_harden(44), offset); // Using BIP44
+    offset = derivation_path.writeUInt32BE(_harden(501), offset); // Solana's BIP44 path
+    offset = derivation_path.writeUInt32BE(_harden(useAccount), offset);
+    derivation_path.writeUInt32BE(_harden(useChange), offset);
+    return derivation_path;
+  } else {
+    throw new Error('Invalid derivation path');
+  }
 }
 
 async function solana_ledger_get_pubkey(transport, derivation_path) {
@@ -102,7 +125,6 @@ export async function solana_ledger_sign_bytes(
 ) {
   var num_paths = Buffer.alloc(1);
   num_paths.writeUInt8(1);
-
   const payload = Buffer.concat([num_paths, derivation_path, msg_bytes]);
 
   return solana_send(transport, INS_SIGN_MESSAGE, P1_CONFIRM, payload);
@@ -122,4 +144,16 @@ export async function getPublicKey(transport, path) {
   const from_pubkey_string = bs58.encode(from_pubkey_bytes);
 
   return new PublicKey(from_pubkey_string);
+}
+
+export async function solana_ledger_confirm_public_key(
+  transport,
+  derivation_path,
+) {
+  return await solana_send(
+    transport,
+    INS_GET_PUBKEY,
+    P1_CONFIRM,
+    derivation_path,
+  );
 }

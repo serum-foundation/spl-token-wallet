@@ -44,13 +44,13 @@ export default function TokenInfoDialog({
         <Typography variant="body2" className={classes.explorerLink}>
           <Link
             href={
-              `https://explorer.solana.com/account/${publicKey.toBase58()}` +
-              urlSuffix
+              `https://solscan.io/account/${publicKey.toBase58()}`
+              + urlSuffix
             }
             target="_blank"
             rel="noopener"
           >
-            View on Solana Explorer
+            View on Solscan
           </Link>
         </Typography>
         {!!mint && (

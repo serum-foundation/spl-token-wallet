@@ -24,3 +24,6 @@ yarn-error.log*
 
 .idea
 .eslintcache
+
+# generate with `build:extension` script
+extension/build/*

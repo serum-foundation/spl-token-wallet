@@ -1,11 +1,9 @@
 import bs58 from 'bs58';
-import { Message, SystemInstruction, SystemProgram } from '@solana/web3.js';
+import { Connection, Message, StakeInstruction, StakeProgram, SystemInstruction, SystemProgram } from '@solana/web3.js';
 import {
   decodeInstruction,
-  decodeTokenInstructionData,
   Market,
   MARKETS,
-  TokenInstructions,
   SETTLE_FUNDS_BASE_WALLET_INDEX,
   SETTLE_FUNDS_QUOTE_WALLET_INDEX,
   NEW_ORDER_OPEN_ORDERS_INDEX,
@@ -13,8 +11,10 @@ import {
   NEW_ORDER_V3_OPEN_ORDERS_INDEX,
   NEW_ORDER_V3_OWNER_INDEX,
 } from '@project-serum/serum';
+import { decodeTokenInstruction } from '@project-serum/token';
 import { PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from './tokens/instructions';
+import { Wallet } from './wallet';
 
 const RAYDIUM_STAKE_PROGRAM_ID = new PublicKey(
   'EhhTKczWMGQt46ynNeRX1WfeagwwJd7ufHvCDjRxjo5Q',
@@ -23,11 +23,18 @@ const RAYDIUM_LP_PROGRAM_ID = new PublicKey(
   'RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr',
 );
 
+const MANGO_PROGRAM_ID = new PublicKey(
+  'JD3bq9hGdy38PuWQ4h2YJpELmHVGPPfFSuFkpzAd9zfu',
+);
+const MANGO_PROGRAM_ID_V2 = new PublicKey(
+  '5fNfvyp5czQVX77yoACa3JJVEhdRaWjPuazuWgjhTqEH',
+);
+
 const marketCache = {};
 let marketCacheConnection = null;
 const cacheDuration = 15 * 1000;
 
-export const decodeMessage = async (connection, wallet, message) => {
+export const decodeMessage = async (connection: Connection, wallet: Wallet, message: Buffer) => {
   // get message object
   const transactionMessage = Message.from(message);
   if (!transactionMessage?.instructions || !transactionMessage?.accountKeys) {
@@ -38,7 +45,7 @@ export const decodeMessage = async (connection, wallet, message) => {
   const publicKey = wallet.publicKey;
 
   // get instructions
-  const instructions = [];
+  const instructions: any[] = [];
   for (var i = 0; i < transactionMessage.instructions.length; i++) {
     let transactionInstruction = transactionMessage.instructions[i];
     const instruction = await toInstruction(
@@ -46,6 +53,7 @@ export const decodeMessage = async (connection, wallet, message) => {
       publicKey,
       transactionMessage?.accountKeys,
       transactionInstruction,
+      transactionMessage,
       i,
     );
     instructions.push({
@@ -57,11 +65,12 @@ export const decodeMessage = async (connection, wallet, message) => {
 };
 
 const toInstruction = async (
-  connection,
-  publicKey,
+  connection: Connection,
+  publicKey: PublicKey,
   accountKeys,
   instruction,
-  index,
+  transactionMessage: Message,
+  index: number,
 ) => {
   if (
     !instruction?.data ||
@@ -87,15 +96,12 @@ const toInstruction = async (
     if (programId.equals(SystemProgram.programId)) {
       console.log('[' + index + '] Handled as system instruction');
       return handleSystemInstruction(publicKey, instruction, accountKeys);
+    } else if (programId.equals(StakeProgram.programId)) {
+      console.log('[' + index + '] Handled as stake instruction');
+      return handleStakeInstruction(publicKey, instruction, accountKeys);
     } else if (programId.equals(TOKEN_PROGRAM_ID)) {
       console.log('[' + index + '] Handled as token instruction');
-      let decodedInstruction = decodeTokenInstruction(decoded);
-      return handleTokenInstruction(
-        publicKey,
-        instruction.accounts,
-        decodedInstruction,
-        accountKeys,
-      );
+      return handleTokenInstruction(publicKey, instruction, accountKeys);
     } else if (
       MARKETS.some(
         (market) => market.programId && market.programId.equals(programId),
@@ -127,13 +133,45 @@ const toInstruction = async (
         accountKeys,
         decodedInstruction,
       );
+    } else if (programId.equals(MANGO_PROGRAM_ID) || programId.equals(MANGO_PROGRAM_ID_V2)) {
+      console.log('[' + index + '] Handled as mango markets instruction');
+      let decodedInstruction = decodeMangoInstruction(decoded);
+      return await handleMangoInstruction(
+        connection,
+        instruction,
+        accountKeys,
+        decodedInstruction,
+      );
+    } else {
+      return {
+        type: 'Unknown',
+        accountMetas: instruction.accounts.map((index) => ({
+          publicKey: accountKeys[index],
+          isWritable: transactionMessage.isAccountWritable(index),
+        })),
+        programId,
+      };
     }
-  } catch {}
+  } catch (e) {
+    console.log(`Failed to decode instruction: ${e}`);
+  }
 
   // all decodings failed
   console.log('[' + index + '] Failed, data: ' + JSON.stringify(decoded));
 
   return;
+};
+
+const handleMangoInstruction = async (
+  connection,
+  instruction,
+  accountKeys,
+  decodedInstruction,
+) => {
+  // TODO
+  return {
+    type: 'mango',
+  };
 };
 
 const handleRayStakeInstruction = async (
@@ -158,6 +196,11 @@ const handleRayLpInstruction = async (
   return {
     type: 'raydium',
   };
+};
+
+const decodeMangoInstruction = () => {
+  // TODO
+  return undefined;
 };
 
 const decodeStakeInstruction = () => {
@@ -251,22 +294,6 @@ const handleDexInstruction = async (
   };
 };
 
-const decodeTokenInstruction = (bufferData) => {
-  if (!bufferData) {
-    return;
-  }
-
-  if (bufferData.length === 1) {
-    if (bufferData[0] === 1) {
-      return { initializeAccount: {} };
-    } else if (bufferData[0] === 9) {
-      return { closeAccount: {} };
-    }
-  } else {
-    return decodeTokenInstructionData(bufferData);
-  }
-};
-
 const handleSystemInstruction = (publicKey, instruction, accountKeys) => {
   const { programIdIndex, accounts, data } = instruction;
   if (!programIdIndex || !accounts || !data) {
@@ -336,42 +363,99 @@ const handleSystemInstruction = (publicKey, instruction, accountKeys) => {
   };
 };
 
-const handleTokenInstruction = (
-  publicKey,
-  accounts,
-  decodedInstruction,
-  accountKeys,
-) => {
-  if (!decodedInstruction || Object.keys(decodedInstruction).length > 1) {
+const handleStakeInstruction = (publicKey, instruction, accountKeys) => {
+  const { programIdIndex, accounts, data } = instruction;
+  if (!programIdIndex || !accounts || !data) {
     return;
   }
 
-  // get data
-  const type = Object.keys(decodedInstruction)[0];
-  let data = decodedInstruction[type];
-  if (type === 'initializeAccount') {
-    const initializeAccountData = getInitializeAccountData(
-      publicKey,
-      accounts,
-      accountKeys,
-    );
-    data = { ...data, ...initializeAccountData };
-  } else if (type === 'transfer') {
-    const transferData = getTransferData(publicKey, accounts, accountKeys);
-    data = { ...data, ...transferData };
-  } else if (type === 'closeAccount') {
-    const closeAccountData = getCloseAccountData(
-      publicKey,
-      accounts,
-      accountKeys,
-    );
-    data = { ...data, ...closeAccountData };
+  // construct stake instruction
+  const stakeInstruction = {
+    programId: accountKeys[programIdIndex],
+    keys: accounts.map((accountIndex) => ({
+      pubkey: accountKeys[accountIndex],
+    })),
+    data: bs58.decode(data),
+  };
+
+  let decoded;
+  const type = StakeInstruction.decodeInstructionType(stakeInstruction);
+  switch (type) {
+    case 'AuthorizeWithSeed':
+      decoded = StakeInstruction.decodeAuthorizeWithSeed(stakeInstruction);
+      break;
+    case 'Authorize':
+      decoded = StakeInstruction.decodeAuthorize(stakeInstruction);
+      break;
+    case 'Deactivate':
+      decoded = StakeInstruction.decodeDeactivate(stakeInstruction);
+      break;
+    case 'Delegate':
+      decoded = StakeInstruction.decodeDelegate(stakeInstruction);
+      break;
+    case 'Initialize':
+      decoded = StakeInstruction.decodeInitialize(stakeInstruction);
+      // Lockup inactive if all zeroes
+      const lockup = decoded.lockup;
+      if (lockup && lockup.unixTimestamp === 0 && lockup.epoch === 0 && lockup.custodian.equals(PublicKey.default)) {
+        decoded.lockup = 'Inactive';
+      }
+      else {
+        decoded.lockup = `unixTimestamp: ${lockup.unixTimestamp}, custodian: ${lockup.epoch}, custodian: ${lockup.custodian.toBase58()}`;
+      }
+      // flatten authorized to allow address render
+      decoded.authorizedStaker = decoded.authorized.staker
+      decoded.authorizedWithdrawer = decoded.authorized.withdrawer
+      delete decoded.authorized
+      break;
+    case 'Split':
+      decoded = StakeInstruction.decodeSplit(stakeInstruction);
+      break;
+    case 'Withdraw':
+      decoded = StakeInstruction.decodeWithdraw(stakeInstruction);
+      break;
+    default:
+      return;
+  }
+
+  if (
+    !decoded ||
+    (decoded.fromPubkey && !publicKey.equals(decoded.fromPubkey))
+  ) {
+    return;
   }
 
   return {
-    type,
-    data,
+    type: 'stake' + type,
+    data: decoded,
   };
+};
+
+const handleTokenInstruction = (
+  publicKey: PublicKey,
+  instruction,
+  accountKeys,
+) => {
+  const { programIdIndex, accounts, data } = instruction;
+  if (!programIdIndex || !accounts || !data) {
+    return;
+  }
+
+  // construct token instruction
+  const tokenInstruction = {
+    programId: accountKeys[programIdIndex],
+    keys: accounts.map((accountIndex) => ({
+      pubkey: accountKeys[accountIndex],
+    })),
+    data: bs58.decode(data),
+  };
+
+  let decoded = decodeTokenInstruction(tokenInstruction);
+
+  return {
+    type: decoded.type,
+    data: decoded.params,
+  }
 };
 
 const getNewOrderData = (accounts, accountKeys) => {
@@ -400,7 +484,7 @@ const getNewOrderV3Data = (accounts, accountKeys) => {
     NEW_ORDER_V3_OWNER_INDEX,
   );
   return { openOrdersPubkey, ownerPubkey };
-}
+};
 
 const getSettleFundsData = (accounts, accountKeys) => {
   const basePubkey = getAccountByIndex(
@@ -420,84 +504,6 @@ const getSettleFundsData = (accounts, accountKeys) => {
   }
 
   return { basePubkey, quotePubkey };
-};
-
-const getTransferData = (publicKey, accounts, accountKeys) => {
-  const sourcePubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.TRANSFER_SOURCE_INDEX,
-  );
-
-  const destinationPubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.TRANSFER_DESTINATION_INDEX,
-  );
-
-  const ownerPubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.TRANSFER_OWNER_INDEX,
-  );
-
-  if (!ownerPubkey || !publicKey.equals(ownerPubkey)) {
-    return;
-  }
-
-  return { sourcePubkey, destinationPubkey, ownerPubkey };
-};
-
-const getInitializeAccountData = (publicKey, accounts, accountKeys) => {
-  const accountPubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.INITIALIZE_ACCOUNT_ACCOUNT_INDEX,
-  );
-
-  const mintPubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.INITIALIZE_ACCOUNT_MINT_INDEX,
-  );
-
-  const ownerPubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.INITIALIZE_ACCOUNT_OWNER_INDEX,
-  );
-
-  if (!ownerPubkey || !publicKey.equals(ownerPubkey)) {
-    return;
-  }
-
-  return { accountPubkey, mintPubkey, ownerPubkey };
-};
-
-const getCloseAccountData = (publicKey, accounts, accountKeys) => {
-  const sourcePubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.TRANSFER_SOURCE_INDEX,
-  );
-
-  const destinationPubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.TRANSFER_DESTINATION_INDEX,
-  );
-
-  const ownerPubkey = getAccountByIndex(
-    accounts,
-    accountKeys,
-    TokenInstructions.TRANSFER_OWNER_INDEX,
-  );
-
-  if (!ownerPubkey || !publicKey.equals(ownerPubkey)) {
-    return;
-  }
-
-  return { sourcePubkey, destinationPubkey, ownerPubkey };
 };
 
 const getAccountByIndex = (accounts, accountKeys, accountIndex) => {

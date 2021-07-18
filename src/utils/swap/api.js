@@ -22,6 +22,7 @@ export async function swapApiRequest(
     headers['Content-Type'] = 'application/json';
     params.body = JSON.stringify(body);
   }
+
   let resp = await fetch(`https://swap.sollet.io/api/${path}`, params);
   return await handleSwapApiResponse(resp, ignoreUserErrors);
 }

@@ -3,11 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@ledgerhq/hw-transport-webusb": "^5.34.0",
-    "@material-ui/core": "^4.11.2",
+    "@bonfida/spl-name-service": "^0.1.12",
+    "@ledgerhq/hw-transport-webhid": "^5.51.1",
+    "@material-ui/core": "^4.11.4",
     "@material-ui/icons": "^4.11.2",
-    "@project-serum/serum": "^0.13.24",
-    "@solana/web3.js": "^0.87.2",
+    "@material-ui/lab": "^4.0.0-alpha.58",
+    "@project-serum/anchor": "^0.7.0",
+    "@project-serum/serum": "^0.13.33",
+    "@project-serum/swap-ui": "^0.2.1",
+    "@project-serum/token": "^0.0.1-alpha.3",
+    "@solana/spl-token-registry": "^0.2.102",
+    "@solana/web3.js": "^1.17.0",
     "@testing-library/jest-dom": "^5.11.6",
     "@testing-library/react": "^11.2.2",
     "@testing-library/user-event": "^12.6.0",
@@ -23,10 +29,12 @@
     "buffer-layout": "^1.2.0",
     "ed25519-hd-key": "^1.2.0",
     "immutable-tuple": "^0.4.10",
+    "material-ui-popup-state": "^1.8.3",
     "mdi-material-ui": "^6.21.0",
     "notistack": "^1.0.2",
     "qrcode.react": "^1.0.0",
     "react": "^17.0.1",
+    "react-async-hook": "^3.6.2",
     "react-dom": "^17.0.1",
     "react-scripts": "4.0.1",
     "tweetnacl": "^1.0.3",
@@ -37,14 +45,23 @@
     "predeploy": "git pull --ff-only && yarn && yarn build",
     "deploy": "gh-pages -d build",
     "fix": "run-s fix:*",
-    "fix:prettier": "prettier \"src/**/*.js\" --write",
+    "fix:prettier": "prettier \"src/**/*.js\" \"extension/src/*.js\" --write",
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:extension": "yarn build && cp -a ./build/. ./extension/build/ && yarn build:extension-scripts",
+    "build:extension-scripts": "cp -a ./extension/src/. ./extension/build/.",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
-    "extends": "react-app"
+    "env": {
+      "browser": true,
+      "es6": true,
+      "webextensions": true
+    },
+    "extends": [
+      "react-app"
+    ]
   },
   "jest": {
     "transformIgnorePatterns": [

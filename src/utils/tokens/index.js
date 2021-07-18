@@ -14,14 +14,9 @@ import {
   memoInstruction,
   mintTo,
   TOKEN_PROGRAM_ID,
-  transfer,
+  transferChecked,
 } from './instructions';
-import {
-  ACCOUNT_LAYOUT,
-  getOwnedAccountsFilters,
-  MINT_LAYOUT,
-  parseTokenAccountData,
-} from './data';
+import { ACCOUNT_LAYOUT, getOwnedAccountsFilters, MINT_LAYOUT } from './data';
 import bs58 from 'bs58';
 
 export async function getOwnedTokenAccounts(connection, publicKey) {
@@ -300,9 +295,10 @@ export async function transferTokens({
   amount,
   memo,
   mint,
+  decimals,
   overrideDestinationCheck,
 }) {
-  const destinationAccountInfo = await connection.getAccountInfo(
+  let destinationAccountInfo = await connection.getAccountInfo(
     destinationPublicKey,
   );
   if (
@@ -312,6 +308,8 @@ export async function transferTokens({
     return await transferBetweenSplTokenAccounts({
       connection,
       owner,
+      mint,
+      decimals,
       sourcePublicKey,
       destinationPublicKey,
       amount,
@@ -325,22 +323,25 @@ export async function transferTokens({
   ) {
     throw new Error('Cannot send to address with zero SOL balances');
   }
-  const destinationSplTokenAccount = (
-    await getOwnedTokenAccounts(connection, destinationPublicKey)
-  )
-    .map(({ publicKey, accountInfo }) => {
-      return { publicKey, parsed: parseTokenAccountData(accountInfo.data) };
-    })
-    .filter(({ parsed }) => parsed.mint.equals(mint))
-    .sort((a, b) => {
-      return b.parsed.amount - a.parsed.amount;
-    })[0];
-  if (destinationSplTokenAccount) {
+
+  const destinationAssociatedTokenAddress = await findAssociatedTokenAddress(
+    destinationPublicKey,
+    mint,
+  );
+  destinationAccountInfo = await connection.getAccountInfo(
+    destinationAssociatedTokenAddress,
+  );
+  if (
+    !!destinationAccountInfo &&
+    destinationAccountInfo.owner.equals(TOKEN_PROGRAM_ID)
+  ) {
     return await transferBetweenSplTokenAccounts({
       connection,
       owner,
+      mint,
+      decimals,
       sourcePublicKey,
-      destinationPublicKey: destinationSplTokenAccount.publicKey,
+      destinationPublicKey: destinationAssociatedTokenAddress,
       amount,
       memo,
     });
@@ -353,44 +354,24 @@ export async function transferTokens({
     amount,
     memo,
     mint,
+    decimals,
   });
-}
-
-// SPL tokens only.
-export async function transferAndClose({
-  connection,
-  owner,
-  sourcePublicKey,
-  destinationPublicKey,
-  amount,
-}) {
-  const tx = createTransferBetweenSplTokenAccountsInstruction({
-    ownerPublicKey: owner.publicKey,
-    sourcePublicKey,
-    destinationPublicKey,
-    amount,
-  });
-  tx.add(
-    closeAccount({
-      source: sourcePublicKey,
-      destination: owner.publicKey,
-      owner: owner.publicKey,
-    }),
-  );
-  let signers = [];
-  return await signAndSendTransaction(connection, tx, owner, signers);
 }
 
 function createTransferBetweenSplTokenAccountsInstruction({
   ownerPublicKey,
+  mint,
+  decimals,
   sourcePublicKey,
   destinationPublicKey,
   amount,
   memo,
 }) {
   let transaction = new Transaction().add(
-    transfer({
+    transferChecked({
       source: sourcePublicKey,
+      mint,
+      decimals,
       destination: destinationPublicKey,
       owner: ownerPublicKey,
       amount,
@@ -405,6 +386,8 @@ function createTransferBetweenSplTokenAccountsInstruction({
 async function transferBetweenSplTokenAccounts({
   connection,
   owner,
+  mint,
+  decimals,
   sourcePublicKey,
   destinationPublicKey,
   amount,
@@ -412,6 +395,8 @@ async function transferBetweenSplTokenAccounts({
 }) {
   const transaction = createTransferBetweenSplTokenAccountsInstruction({
     ownerPublicKey: owner.publicKey,
+    mint,
+    decimals,
     sourcePublicKey,
     destinationPublicKey,
     amount,
@@ -429,6 +414,7 @@ async function createAndTransferToAccount({
   amount,
   memo,
   mint,
+  decimals,
 }) {
   const [
     createAccountInstruction,
@@ -449,6 +435,8 @@ async function createAndTransferToAccount({
   const transferBetweenAccountsTxn = createTransferBetweenSplTokenAccountsInstruction(
     {
       ownerPublicKey: owner.publicKey,
+      mint,
+      decimals,
       sourcePublicKey,
       destinationPublicKey: newAddress,
       amount,

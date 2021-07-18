@@ -4,6 +4,7 @@ import ERC20_ABI from './erc20-abi.json';
 import SWAP_ABI from './swap-abi.json';
 import Button from '@material-ui/core/Button';
 import { useCallAsync } from '../notifications';
+import { isExtension } from '../utils';
 
 const web3 = new Web3(window.ethereum);
 // Change to use estimated gas limit
@@ -234,11 +235,11 @@ export function ConnectToMetamaskButton() {
         color="primary"
         variant="outlined"
         component="a"
-        href="https://metamask.io/"
+        href={isExtension ? 'https://sollet.io' : 'https://metamask.io/'}
         target="_blank"
         rel="noopener"
       >
-        Connect to MetaMask
+        {isExtension ? 'Open sollet.io' : 'Connect to MetaMask'}
       </Button>
     );
   }

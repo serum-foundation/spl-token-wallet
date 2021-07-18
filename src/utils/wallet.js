@@ -14,18 +14,17 @@ import {
   getOwnedTokenAccounts,
   nativeTransfer,
   transferTokens,
-  transferAndClose,
 } from './tokens';
-import { TOKEN_PROGRAM_ID, WRAPPED_SOL_MINT } from './tokens/instructions';
+import { TOKEN_PROGRAM_ID } from './tokens/instructions';
 import {
   ACCOUNT_LAYOUT,
   parseMintData,
   parseTokenAccountData,
 } from './tokens/data';
 import { useListener, useLocalStorageState, useRefEqual } from './utils';
-import { useTokenName } from './tokens/names';
+import { useTokenInfo } from './tokens/names';
 import { refreshCache, useAsyncData } from './fetch-loop';
-import { getUnlockedMnemonicAndSeed, walletSeedChanged } from './wallet-seed';
+import { useUnlockedMnemonicAndSeed, walletSeedChanged } from './wallet-seed';
 import { WalletProviderFactory } from './walletProvider/factory';
 import { getAccountFromSeed } from './walletProvider/localStorage';
 import { useSnackbar } from 'notistack';
@@ -99,6 +98,7 @@ export class Wallet {
     destination,
     amount,
     mint,
+    decimals,
     memo = null,
     overrideDestinationCheck = false,
   ) => {
@@ -116,6 +116,7 @@ export class Wallet {
       amount,
       memo,
       mint,
+      decimals,
       overrideDestinationCheck,
     });
   };
@@ -133,16 +134,6 @@ export class Wallet {
     });
   };
 
-  transferAndClose = async (source, destination, amount) => {
-    return await transferAndClose({
-      connection: this.connection,
-      owner: this,
-      sourcePublicKey: source,
-      destinationPublicKey: destination,
-      amount,
-    });
-  };
-
   signTransaction = async (transaction) => {
     return this.provider.signTransaction(transaction);
   };
@@ -156,12 +147,12 @@ const WalletContext = React.createContext(null);
 
 export function WalletProvider({ children }) {
   useListener(walletSeedChanged, 'change');
-  const {
+  const [{
     mnemonic,
     seed,
     importsEncryptionKey,
     derivationPath,
-  } = getUnlockedMnemonicAndSeed();
+  }] = useUnlockedMnemonicAndSeed();
   const { enqueueSnackbar } = useSnackbar();
   const connection = useConnection();
   const [wallet, setWallet] = useState();
@@ -172,16 +163,19 @@ export function WalletProvider({ children }) {
     {},
   );
   // `walletSelector` identifies which wallet to use.
-  const [walletSelector, setWalletSelector] = useLocalStorageState(
+  let [walletSelector, setWalletSelector] = useLocalStorageState(
     'walletSelector',
     DEFAULT_WALLET_SELECTOR,
   );
-  const [ledgerPubKey, setLedgerPubKey] = useState(
-    walletSelector.ledger ? walletSelector.importedPubkey : undefined,
-  );
+  const [_hardwareWalletAccount, setHardwareWalletAccount] = useState(null);
 
   // `walletCount` is the number of HD wallets.
   const [walletCount, setWalletCount] = useLocalStorageState('walletCount', 1);
+
+  if (walletSelector.ledger && !_hardwareWalletAccount) {
+    walletSelector = DEFAULT_WALLET_SELECTOR;
+    setWalletSelector(DEFAULT_WALLET_SELECTOR);
+  }
 
   useEffect(() => {
     (async () => {
@@ -193,9 +187,15 @@ export function WalletProvider({ children }) {
         try {
           const onDisconnect = () => {
             setWalletSelector(DEFAULT_WALLET_SELECTOR);
-            setLedgerPubKey(undefined);
+            setHardwareWalletAccount(null);
           };
-          wallet = await Wallet.create(connection, 'ledger', { onDisconnect });
+          const args = {
+            onDisconnect,
+            derivationPath: walletSelector.derivationPath,
+            account: walletSelector.account,
+            change: walletSelector.change,
+          };
+          wallet = await Wallet.create(connection, 'ledger', args);
         } catch (e) {
           console.log(`received error using ledger wallet: ${e}`);
           let message = 'Received error unlocking ledger';
@@ -204,7 +204,7 @@ export function WalletProvider({ children }) {
           }
           enqueueSnackbar(message, { variant: 'error' });
           setWalletSelector(DEFAULT_WALLET_SELECTOR);
-          setLedgerPubKey(undefined);
+          setHardwareWalletAccount(null);
           return;
         }
       }
@@ -242,11 +242,8 @@ export function WalletProvider({ children }) {
     enqueueSnackbar,
     derivationPath,
   ]);
-
   function addAccount({ name, importedAccount, ledger }) {
-    if (ledger) {
-      setLedgerPubKey(importedAccount);
-    } else if (importedAccount === undefined) {
+    if (importedAccount === undefined) {
       name && localStorage.setItem(`name${walletCount}`, name);
       setWalletCount(walletCount + 1);
     } else {
@@ -283,9 +280,9 @@ export function WalletProvider({ children }) {
     }
   }
 
-  const accounts = useMemo(() => {
+  const [accounts, derivedAccounts] = useMemo(() => {
     if (!seed) {
-      return [];
+      return [[], []];
     }
 
     const seedBuffer = Buffer.from(seed, 'hex');
@@ -319,29 +316,27 @@ export function WalletProvider({ children }) {
       };
     });
 
-    if (ledgerPubKey) {
-      derivedAccounts.push({
-        selector: {
-          walletIndex: undefined,
-          importedPubkey: ledgerPubKey,
-          ledger: true,
-        },
-        address: new PublicKey(ledgerPubKey), // todo: get the ledger address
-        name: 'Hardware wallet',
-        isSelected: walletSelector.ledger,
-      });
-    }
-
-    return derivedAccounts.concat(importedAccounts);
+    const accounts = derivedAccounts.concat(importedAccounts);
+    return [accounts, derivedAccounts];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    seed,
-    walletCount,
-    walletSelector,
-    privateKeyImports,
-    walletNames,
-    ledgerPubKey,
-  ]);
+  }, [seed, walletCount, walletSelector, privateKeyImports, walletNames]);
+
+  let hardwareWalletAccount;
+  if (_hardwareWalletAccount) {
+    hardwareWalletAccount = {
+      ..._hardwareWalletAccount,
+      selector: {
+        walletIndex: undefined,
+        ledger: true,
+        importedPubkey: _hardwareWalletAccount.publicKey,
+        derivationPath: _hardwareWalletAccount.derivationPath,
+        account: _hardwareWalletAccount.account,
+        change: _hardwareWalletAccount.change,
+      },
+      address: _hardwareWalletAccount.publicKey,
+      isSelected: walletSelector.ledger,
+    };
+  }
 
   return (
     <WalletContext.Provider
@@ -355,9 +350,12 @@ export function WalletProvider({ children }) {
         privateKeyImports,
         setPrivateKeyImports,
         accounts,
+        derivedAccounts,
         addAccount,
         setAccountName,
         derivationPath,
+        hardwareWalletAccount,
+        setHardwareWalletAccount,
       }}
     >
       {children}
@@ -419,22 +417,10 @@ export function useBalanceInfo(publicKey) {
     ? parseTokenAccountData(accountInfo.data)
     : {};
   let [mintInfo, mintInfoLoaded] = useAccountInfo(mint);
-  let { name, symbol } = useTokenName(mint);
+  let { name, symbol, logoUri } = useTokenInfo(mint);
 
   if (!accountInfoLoaded) {
     return null;
-  }
-
-  if (mint && mint.equals(WRAPPED_SOL_MINT)) {
-    return {
-      amount,
-      decimals: 9,
-      mint,
-      owner,
-      tokenName: 'Wrapped SOL',
-      tokenSymbol: 'SOL',
-      valid: true,
-    };
   }
 
   if (mint && mintInfoLoaded) {
@@ -447,6 +433,7 @@ export function useBalanceInfo(publicKey) {
         owner,
         tokenName: name,
         tokenSymbol: symbol,
+        tokenLogoUri: logoUri,
         valid: true,
       };
     } catch (e) {
@@ -457,6 +444,7 @@ export function useBalanceInfo(publicKey) {
         owner,
         tokenName: 'Invalid',
         tokenSymbol: 'INVALID',
+        tokenLogoUri: null,
         valid: false,
       };
     }
@@ -480,10 +468,21 @@ export function useBalanceInfo(publicKey) {
 export function useWalletSelector() {
   const {
     accounts,
+    derivedAccounts,
     addAccount,
     setWalletSelector,
     setAccountName,
+    hardwareWalletAccount,
+    setHardwareWalletAccount,
   } = useContext(WalletContext);
 
-  return { accounts, setWalletSelector, addAccount, setAccountName };
+  return {
+    accounts,
+    derivedAccounts,
+    setWalletSelector,
+    addAccount,
+    setAccountName,
+    hardwareWalletAccount,
+    setHardwareWalletAccount,
+  };
 }
