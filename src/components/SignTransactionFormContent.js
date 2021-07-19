@@ -47,7 +47,7 @@ function isSafeInstruction(publicKeys, owner, txInstructions) {
         } else if (instruction.type === 'mango') {
           // Whitelist mango for now.
         } else if (
-          ['cancelOrder', 'matchOrders', 'cancelOrderV3'].includes(
+          ['cancelOrder', 'matchOrders', 'cancelOrderV2', 'cancelOrderV3'].includes(
             instruction.type,
           )
         ) {
